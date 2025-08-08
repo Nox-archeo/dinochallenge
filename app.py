@@ -711,9 +711,13 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
             "application_context": {
                 "brand_name": "Dino Challenge",
                 "locale": "fr-CH",
-                "landing_page": "LOGIN",  # Page de connexion standard PayPal
+                "landing_page": "BILLING",  # Page paiement direct avec option carte
                 "shipping_preference": "NO_SHIPPING",
                 "user_action": "PAY_NOW",
+                "payment_method": {
+                    "payer_selected": "PAYPAL",
+                    "payee_preferred": "UNRESTRICTED"  # Permet cartes ET PayPal
+                },
                 "return_url": f"https://dinochallenge-bot.onrender.com/payment-success?telegram_id={telegram_id}",
                 "cancel_url": f"{GAME_URL}?payment=cancelled"
             }
