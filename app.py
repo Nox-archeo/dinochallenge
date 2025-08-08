@@ -11,6 +11,7 @@ Fonctionnalités :
 import os
 import logging
 import asyncio
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict
 import json
@@ -1367,12 +1368,30 @@ async def run_telegram_bot():
             await setup_bot_commands()
             logger.info("🤖 Démarrage du bot Telegram...")
             
-            # Paramètres simplifiés compatibles python-telegram-bot 20.6
-            await app.run_polling(
-                drop_pending_updates=True
-            )
+            # Méthode alternative plus compatible
+            async with app:
+                await app.start()
+                await app.updater.start_polling(
+                    poll_interval=1.0,
+                    timeout=20,
+                    drop_pending_updates=True
+                )
+                logger.info("✅ Bot Telegram démarré avec succès")
+                
+                # Maintenir le bot en vie
+                try:
+                    while True:
+                        await asyncio.sleep(1)
+                except KeyboardInterrupt:
+                    logger.info("🛑 Arrêt du bot Telegram")
+                finally:
+                    await app.updater.stop()
+                    await app.stop()
+                    
     except Exception as e:
         logger.error(f"❌ Erreur bot Telegram: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
 
 def run_flask_app():
     """Exécuter l'API Flask avec Gunicorn en production"""
