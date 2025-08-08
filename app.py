@@ -27,6 +27,7 @@ from flask import Flask, request, jsonify, render_template_string, redirect
 from flask_cors import CORS
 import threading
 import time
+import base64
 
 # Imports pour PayPal
 import paypalrestsdk
@@ -79,10 +80,13 @@ PAYPAL_SECRET_KEY = os.getenv('PAYPAL_SECRET_KEY')
 PAYPAL_MODE = os.getenv('PAYPAL_MODE', 'sandbox')  # 'sandbox' ou 'live'
 PAYPAL_WEBHOOK_URL = 'https://dinochallenge-bot.onrender.com/paypal-webhook'
 
+# URLs PayPal API v2
+PAYPAL_BASE_URL = 'https://api-m.sandbox.paypal.com' if PAYPAL_MODE == 'sandbox' else 'https://api-m.paypal.com'
+
 # Prix en CHF (taxes incluses)
 MONTHLY_PRICE_CHF = Decimal('11.00')
 
-# Configuration PayPal SDK
+# Configuration PayPal SDK (pour la compatibilité)
 if PAYPAL_CLIENT_ID and PAYPAL_SECRET_KEY:
     paypalrestsdk.configure({
         "mode": PAYPAL_MODE,
@@ -645,12 +649,97 @@ def get_leaderboard():
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
+# FONCTIONS PAYPAL API V2
+# =============================================================================
+
+def get_paypal_access_token():
+    """Obtenir un token d'accès PayPal"""
+    try:
+        url = f"{PAYPAL_BASE_URL}/v1/oauth2/token"
+        
+        headers = {
+            'Accept': 'application/json',
+            'Accept-Language': 'en_US',
+        }
+        
+        auth = (PAYPAL_CLIENT_ID, PAYPAL_SECRET_KEY)
+        data = {'grant_type': 'client_credentials'}
+        
+        response = requests.post(url, headers=headers, data=data, auth=auth)
+        
+        if response.status_code == 200:
+            return response.json().get('access_token')
+        else:
+            logger.error(f"❌ Erreur token PayPal: {response.text}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur get_paypal_access_token: {e}")
+        return None
+
+def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'):
+    """Créer une commande PayPal v2 (supporte cartes bancaires)"""
+    try:
+        access_token = get_paypal_access_token()
+        if not access_token:
+            return None
+        
+        url = f"{PAYPAL_BASE_URL}/v2/checkout/orders"
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {access_token}',
+            'PayPal-Request-Id': f'dino_{telegram_id}_{int(time.time())}'
+        }
+        
+        # Données de la commande
+        order_data = {
+            "intent": "CAPTURE",
+            "purchase_units": [{
+                "reference_id": f"dino_monthly_{telegram_id}",
+                "amount": {
+                    "currency_code": currency,
+                    "value": str(amount)
+                },
+                "description": f"Dino Challenge - Accès mensuel pour {datetime.now().strftime('%B %Y')}"
+            }],
+            "payment_source": {
+                "paypal": {
+                    "experience_context": {
+                        "payment_method_preference": "UNRESTRICTED",  # Permet cartes ET PayPal
+                        "brand_name": "Dino Challenge",
+                        "locale": "fr-CH",
+                        "landing_page": "GUEST_CHECKOUT",  # Permet paiement sans compte
+                        "shipping_preference": "NO_SHIPPING",
+                        "user_action": "PAY_NOW",
+                        "return_url": f"https://dinochallenge-bot.onrender.com/payment-success?telegram_id={telegram_id}",
+                        "cancel_url": f"{GAME_URL}?payment=cancelled"
+                    }
+                }
+            }
+        }
+        
+        response = requests.post(url, headers=headers, json=order_data)
+        
+        if response.status_code == 201:
+            order = response.json()
+            logger.info(f"✅ Commande PayPal créée: {order['id']}")
+            return order
+        else:
+            logger.error(f"❌ Erreur création commande PayPal: {response.text}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur create_paypal_order: {e}")
+        return None
+
+# =============================================================================
 # ENDPOINTS PAYPAL
 # =============================================================================
 
 @flask_app.route('/create-payment', methods=['GET', 'POST'])
 def create_payment():
-    """Créer un paiement unique PayPal"""
+    """Créer un paiement unique PayPal avec support carte bancaire"""
     try:
         # Gérer les requêtes GET (depuis les liens Telegram)
         if request.method == 'GET':
@@ -667,59 +756,249 @@ def create_payment():
             if not telegram_id:
                 return jsonify({'error': 'telegram_id requis'}), 400
         
-        # Créer le paiement PayPal
-        payment = paypalrestsdk.Payment({
-            "intent": "sale",
-            "payer": {
-                "payment_method": "paypal"
-            },
-            "redirect_urls": {
-                "return_url": f"{GAME_URL}?payment=success&telegram_id={telegram_id}",
-                "cancel_url": f"{GAME_URL}?payment=cancelled"
-            },
-            "transactions": [{
-                "item_list": {
-                    "items": [{
-                        "name": "Dino Challenge - Accès Mensuel",
-                        "sku": f"dino_monthly_{telegram_id}",
-                        "price": str(MONTHLY_PRICE_CHF),
-                        "currency": "CHF",
-                        "quantity": 1
-                    }]
-                },
-                "amount": {
-                    "total": str(MONTHLY_PRICE_CHF),
-                    "currency": "CHF"
-                },
-                "description": f"Accès Dino Challenge pour le mois {datetime.now().strftime('%B %Y')}"
-            }]
-        })
+        # Créer la commande PayPal v2 (supporte cartes bancaires)
+        order = create_paypal_order(int(telegram_id), MONTHLY_PRICE_CHF)
         
-        if payment.create():
+        if order:
             # Trouver l'URL d'approbation
             approval_url = None
-            for link in payment.links:
-                if link.rel == "approval_url":
-                    approval_url = link.href
+            for link in order.get('links', []):
+                if link.get('rel') == 'approve':
+                    approval_url = link.get('href')
                     break
             
-            # Si c'est une requête GET, rediriger directement vers PayPal
-            if request.method == 'GET':
-                return redirect(approval_url)
-            
-            # Si c'est une requête POST, retourner le JSON
-            return jsonify({
-                'payment_id': payment.id,
-                'approval_url': approval_url,
-                'telegram_id': telegram_id
-            })
+            if approval_url:
+                # Si c'est une requête GET, rediriger directement vers PayPal
+                if request.method == 'GET':
+                    return redirect(approval_url)
+                
+                # Si c'est une requête POST, retourner le JSON
+                return jsonify({
+                    'order_id': order['id'],
+                    'approval_url': approval_url,
+                    'telegram_id': telegram_id,
+                    'status': order['status']
+                })
+            else:
+                return jsonify({'error': 'URL d\'approbation non trouvée'}), 500
         else:
-            logger.error(f"❌ Erreur création paiement PayPal: {payment.error}")
-            return jsonify({'error': 'Erreur création paiement'}), 500
+            return jsonify({'error': 'Erreur création commande PayPal'}), 500
             
     except Exception as e:
         logger.error(f"❌ Erreur endpoint create-payment: {e}")
         return jsonify({'error': str(e)}), 500
+
+@flask_app.route('/capture-payment', methods=['POST'])
+def capture_payment():
+    """Capturer un paiement PayPal après approbation"""
+    try:
+        data = request.get_json()
+        order_id = data.get('order_id')
+        
+        if not order_id:
+            return jsonify({'error': 'order_id requis'}), 400
+        
+        # Capturer le paiement
+        access_token = get_paypal_access_token()
+        if not access_token:
+            return jsonify({'error': 'Erreur authentification PayPal'}), 500
+        
+        url = f"{PAYPAL_BASE_URL}/v2/checkout/orders/{order_id}/capture"
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {access_token}',
+        }
+        
+        response = requests.post(url, headers=headers, json={})
+        
+        if response.status_code == 201:
+            capture_data = response.json()
+            logger.info(f"✅ Paiement capturé: {order_id}")
+            
+            # Extraire les informations du paiement
+            purchase_unit = capture_data.get('purchase_units', [{}])[0]
+            capture = purchase_unit.get('payments', {}).get('captures', [{}])[0]
+            amount = Decimal(capture.get('amount', {}).get('value', '0'))
+            
+            # Extraire telegram_id depuis reference_id
+            reference_id = purchase_unit.get('reference_id', '')
+            telegram_id = None
+            if reference_id.startswith('dino_monthly_'):
+                telegram_id = int(reference_id.replace('dino_monthly_', ''))
+            
+            if telegram_id and amount >= MONTHLY_PRICE_CHF:
+                # Enregistrer le paiement
+                success = db.record_payment(
+                    telegram_id=telegram_id,
+                    amount=amount,
+                    payment_type='one_time',
+                    paypal_payment_id=order_id
+                )
+                
+                if success:
+                    # Notifier l'utilisateur
+                    if telegram_app:
+                        asyncio.create_task(notify_payment_success(telegram_id, amount, 'paiement'))
+                    
+                    return jsonify({
+                        'success': True,
+                        'order_id': order_id,
+                        'amount': str(amount),
+                        'telegram_id': telegram_id
+                    })
+                else:
+                    return jsonify({'error': 'Erreur enregistrement paiement'}), 500
+            else:
+                return jsonify({'error': 'Données de paiement invalides'}), 400
+        else:
+            logger.error(f"❌ Erreur capture PayPal: {response.text}")
+            return jsonify({'error': 'Erreur capture paiement'}), 500
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur endpoint capture-payment: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@flask_app.route('/payment-success', methods=['GET'])
+def payment_success():
+    """Page de confirmation de paiement avec capture automatique"""
+    telegram_id = request.args.get('telegram_id')
+    token = request.args.get('token')  # PayPal order ID
+    
+    if not telegram_id or not token:
+        return "❌ Paramètres manquants", 400
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>🦕 Paiement Dino Challenge</title>
+        <meta charset="utf-8">
+        <style>
+            body {{ 
+                font-family: Arial, sans-serif; 
+                max-width: 600px; 
+                margin: 0 auto; 
+                padding: 20px;
+                text-align: center;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }}
+            .container {{
+                background: rgba(255,255,255,0.1);
+                padding: 30px;
+                border-radius: 15px;
+                backdrop-filter: blur(10px);
+            }}
+            .loading {{
+                animation: spin 2s linear infinite;
+                font-size: 3em;
+                margin: 20px 0;
+            }}
+            @keyframes spin {{
+                0% {{ transform: rotate(0deg); }}
+                100% {{ transform: rotate(360deg); }}
+            }}
+            .success {{
+                color: #4CAF50;
+                font-size: 4em;
+                margin: 20px 0;
+            }}
+            .error {{
+                color: #f44336;
+                font-size: 3em;
+                margin: 20px 0;
+            }}
+            .btn {{
+                background: #4CAF50;
+                color: white;
+                padding: 15px 30px;
+                border: none;
+                border-radius: 25px;
+                font-size: 16px;
+                cursor: pointer;
+                text-decoration: none;
+                display: inline-block;
+                margin: 10px;
+            }}
+            .btn:hover {{
+                background: #45a049;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🦕 Dino Challenge</h1>
+            <div id="loading">
+                <div class="loading">⟳</div>
+                <h2>Finalisation de votre paiement...</h2>
+                <p>Veuillez patienter, nous confirmons votre paiement.</p>
+            </div>
+            
+            <div id="success" style="display: none;">
+                <div class="success">✅</div>
+                <h2>Paiement confirmé !</h2>
+                <p>Votre accès au Dino Challenge est maintenant activé !</p>
+                <a href="{GAME_URL}" class="btn">🎮 Jouer maintenant</a>
+                <p><small>Vous pouvez fermer cette page</small></p>
+            </div>
+            
+            <div id="error" style="display: none;">
+                <div class="error">❌</div>
+                <h2>Erreur de paiement</h2>
+                <p id="error-message">Une erreur est survenue lors de la confirmation.</p>
+                <a href="javascript:location.reload()" class="btn">🔄 Réessayer</a>
+            </div>
+        </div>
+        
+        <script>
+            async function capturePayment() {{
+                try {{
+                    const response = await fetch('/capture-payment', {{
+                        method: 'POST',
+                        headers: {{
+                            'Content-Type': 'application/json',
+                        }},
+                        body: JSON.stringify({{
+                            order_id: '{token}'
+                        }})
+                    }});
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {{
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('success').style.display = 'block';
+                        
+                        // Rediriger vers le jeu après 3 secondes
+                        setTimeout(() => {{
+                            window.location.href = '{GAME_URL}?telegram_id={telegram_id}&payment=success';
+                        }}, 3000);
+                    }} else {{
+                        throw new Error(data.error || 'Erreur inconnue');
+                    }}
+                }} catch (error) {{
+                    console.error('Erreur:', error);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('error').style.display = 'block';
+                    document.getElementById('error-message').textContent = error.message;
+                }}
+            }}
+            
+            // Capturer le paiement automatiquement au chargement
+            window.onload = function() {{
+                setTimeout(capturePayment, 1000);
+            }};
+        </script>
+    </body>
+    </html>
+    """
+    
+    return html
 
 @flask_app.route('/create-subscription', methods=['GET', 'POST'])
 def create_subscription():
