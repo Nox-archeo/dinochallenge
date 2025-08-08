@@ -1401,14 +1401,28 @@ def main():
     logger.info(f"🎮 Jeu: {GAME_URL}")
     logger.info(f"👤 Admin: {ORGANIZER_CHAT_ID}")
     
+    # Vérifier si on est en mode production Render
+    is_render_production = os.environ.get('RENDER') == 'true'
+    
     try:
-        # Démarrer Flask dans un thread séparé
-        flask_thread = threading.Thread(target=run_flask_app, daemon=True)
-        flask_thread.start()
-        logger.info("✅ API Flask démarrée en arrière-plan")
-        
-        # Démarrer le bot Telegram (bloquant)
-        asyncio.run(run_telegram_bot())
+        if is_render_production:
+            logger.info("🏭 Mode production Render détecté")
+            
+            # En production : seulement le bot Telegram
+            # L'API sera servie par un autre service ou Gunicorn
+            logger.info("🤖 Démarrage du bot Telegram en mode production")
+            asyncio.run(run_telegram_bot())
+            
+        else:
+            logger.info("🔧 Mode développement local")
+            
+            # Démarrer Flask dans un thread séparé
+            flask_thread = threading.Thread(target=run_flask_app, daemon=True)
+            flask_thread.start()
+            logger.info("✅ API Flask démarrée en arrière-plan")
+            
+            # Démarrer le bot Telegram (bloquant)
+            asyncio.run(run_telegram_bot())
         
     except KeyboardInterrupt:
         logger.info("🛑 Arrêt demandé par l'utilisateur")

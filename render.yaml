@@ -4,7 +4,7 @@ services:
     runtime: python
     region: frankfurt
     buildCommand: pip install -r requirements-alt.txt
-    startCommand: gunicorn wsgi:flask_app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    startCommand: python bot.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.12
@@ -23,26 +23,6 @@ services:
       - key: PAYPAL_MODE
         sync: false
       - key: GAME_URL
-        sync: false
-  
-  - type: worker
-    name: dino-challenge-bot
-    runtime: python
-    region: frankfurt
-    buildCommand: pip install -r requirements-alt.txt
-    startCommand: python telegram_bot.py
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.10.12
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: ORGANIZER_CHAT_ID
-        sync: false
-      - key: PAYPAL_CLIENT_ID
-        sync: false
-      - key: PAYPAL_SECRET_KEY
         sync: false
       - key: PAYPAL_MODE
         value: live
