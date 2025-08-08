@@ -1367,17 +1367,9 @@ async def run_telegram_bot():
             await setup_bot_commands()
             logger.info("🤖 Démarrage du bot Telegram...")
             
-            # Utiliser les paramètres corrects pour python-telegram-bot 20.7
+            # Paramètres simplifiés compatibles python-telegram-bot 20.6
             await app.run_polling(
-                poll_interval=1.0,
-                timeout=10,
-                bootstrap_retries=-1,
-                read_timeout=6.0,
-                write_timeout=6.0,
-                connect_timeout=7.0,
-                pool_timeout=1.0,
-                drop_pending_updates=True,
-                close_loop=False
+                drop_pending_updates=True
             )
     except Exception as e:
         logger.error(f"❌ Erreur bot Telegram: {e}")
