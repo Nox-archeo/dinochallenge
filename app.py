@@ -1339,8 +1339,13 @@ def setup_telegram_bot():
         logger.error("❌ TELEGRAM_BOT_TOKEN manquant !")
         return None
     
-    # Créer l'application bot
-    telegram_app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    # Créer l'application bot avec paramètres spécifiques
+    telegram_app = (
+        Application.builder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .concurrent_updates(True)
+        .build()
+    )
     
     # Ajouter les handlers
     telegram_app.add_handler(CommandHandler("start", start_handler))
@@ -1361,7 +1366,19 @@ async def run_telegram_bot():
         if app:
             await setup_bot_commands()
             logger.info("🤖 Démarrage du bot Telegram...")
-            await app.run_polling(drop_pending_updates=True)
+            
+            # Utiliser les paramètres corrects pour python-telegram-bot 20.7
+            await app.run_polling(
+                poll_interval=1.0,
+                timeout=10,
+                bootstrap_retries=-1,
+                read_timeout=6.0,
+                write_timeout=6.0,
+                connect_timeout=7.0,
+                pool_timeout=1.0,
+                drop_pending_updates=True,
+                close_loop=False
+            )
     except Exception as e:
         logger.error(f"❌ Erreur bot Telegram: {e}")
 

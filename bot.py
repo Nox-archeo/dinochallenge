@@ -35,11 +35,20 @@ if os.environ.get('RENDER'):
         def start_bot():
             """Démarrer le bot Telegram"""
             try:
+                # Essayer d'abord le bot complet
                 import app
                 app.main()
             except Exception as e:
-                print(f"❌ Erreur Bot: {e}")
-                sys.exit(1)
+                print(f"❌ Erreur Bot complet: {e}")
+                print("🔄 Tentative avec bot minimal...")
+                try:
+                    # Fallback vers bot minimal
+                    import bot_minimal
+                    import asyncio
+                    asyncio.run(bot_minimal.main())
+                except Exception as e2:
+                    print(f"❌ Erreur Bot minimal: {e2}")
+                    sys.exit(1)
         
         # Démarrer l'API en arrière-plan
         api_thread = threading.Thread(target=start_api, daemon=True)

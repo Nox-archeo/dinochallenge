@@ -23,6 +23,11 @@ async def main():
             await app.run_polling(
                 poll_interval=1.0,
                 timeout=10,
+                bootstrap_retries=-1,
+                read_timeout=6.0,
+                write_timeout=6.0,
+                connect_timeout=7.0,
+                pool_timeout=1.0,
                 drop_pending_updates=True,
                 close_loop=False
             )
