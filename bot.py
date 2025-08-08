@@ -33,21 +33,31 @@ if os.environ.get('RENDER'):
                 print(f"❌ Erreur Gunicorn: {e}")
         
         def start_bot():
-            """Démarrer le bot Telegram"""
+            """Démarrer le bot Telegram - Version production simplifiée"""
             try:
-                # Essayer d'abord le bot complet
-                import app
-                app.main()
+                # En production, forcer le bot minimal pour éviter les erreurs
+                print("🔄 Lancement du bot minimal en production...")
+                import bot_minimal
+                import asyncio
+                asyncio.run(bot_minimal.main())
             except Exception as e:
-                print(f"❌ Erreur Bot complet: {e}")
-                print("🔄 Tentative avec bot minimal...")
+                print(f"❌ Erreur Bot minimal: {e}")
+                
+                # Lancer diagnostic pour comprendre le problème
+                print("🔍 Lancement du diagnostic...")
                 try:
-                    # Fallback vers bot minimal
-                    import bot_minimal
-                    import asyncio
-                    asyncio.run(bot_minimal.main())
+                    import diagnostic
+                    diagnostic.diagnose()
+                except Exception as diag_e:
+                    print(f"❌ Erreur diagnostic: {diag_e}")
+                
+                # Dernière tentative avec le bot complet
+                try:
+                    print("🔄 Tentative bot complet en dernier recours...")
+                    import app
+                    app.main()
                 except Exception as e2:
-                    print(f"❌ Erreur Bot minimal: {e2}")
+                    print(f"❌ Erreur Bot complet: {e2}")
                     sys.exit(1)
         
         # Démarrer l'API en arrière-plan
