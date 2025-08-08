@@ -35,30 +35,37 @@ if os.environ.get('RENDER'):
         def start_bot():
             """Démarrer le bot Telegram - Version production simplifiée"""
             try:
-                # En production, forcer le bot minimal pour éviter les erreurs
-                print("🔄 Lancement du bot minimal en production...")
-                import bot_minimal
-                import asyncio
-                asyncio.run(bot_minimal.main())
+                # En production, lancer le diagnostic d'abord
+                print("� Lancement du diagnostic...")
+                import diagnostic
+                diagnostic.diagnose()
+                
+                # Puis essayer le bot complet directement
+                print("� Tentative bot complet avec diagnostic...")
+                import app
+                app.main()
+                
             except Exception as e:
-                print(f"❌ Erreur Bot minimal: {e}")
+                print(f"❌ Erreur Bot complet: {e}")
                 
-                # Lancer diagnostic pour comprendre le problème
-                print("🔍 Lancement du diagnostic...")
+                # Essayer le bot fonctionnel (version intermédiaire)
+                print("🔄 Tentative bot fonctionnel...")
                 try:
-                    import diagnostic
-                    diagnostic.diagnose()
-                except Exception as diag_e:
-                    print(f"❌ Erreur diagnostic: {diag_e}")
-                
-                # Dernière tentative avec le bot complet
-                try:
-                    print("🔄 Tentative bot complet en dernier recours...")
-                    import app
-                    app.main()
+                    import bot_fonctionnel
+                    import asyncio
+                    asyncio.run(bot_fonctionnel.main())
                 except Exception as e2:
-                    print(f"❌ Erreur Bot complet: {e2}")
-                    sys.exit(1)
+                    print(f"❌ Erreur Bot fonctionnel: {e2}")
+                    
+                    # En dernier recours, bot minimal
+                    print("🔄 Fallback vers bot minimal...")
+                    try:
+                        import bot_minimal
+                        import asyncio
+                        asyncio.run(bot_minimal.main())
+                    except Exception as e3:
+                        print(f"❌ Erreur Bot minimal: {e3}")
+                        sys.exit(1)
         
         # Démarrer l'API en arrière-plan
         api_thread = threading.Thread(target=start_api, daemon=True)
