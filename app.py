@@ -682,6 +682,7 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
     try:
         access_token = get_paypal_access_token()
         if not access_token:
+            logger.error("❌ Token PayPal manquant")
             return None
         
         url = f"{PAYPAL_BASE_URL}/v2/checkout/orders"
@@ -692,7 +693,7 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
             'PayPal-Request-Id': f'dino_{telegram_id}_{int(time.time())}'
         }
         
-        # Données de la commande
+        # Données de la commande avec structure PayPal v2 correcte
         order_data = {
             "intent": "CAPTURE",
             "purchase_units": [{
@@ -703,30 +704,35 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
                 },
                 "description": f"Dino Challenge - Accès mensuel pour {datetime.now().strftime('%B %Y')}"
             }],
-            "payment_source": {
-                "paypal": {
-                    "experience_context": {
-                        "payment_method_preference": "UNRESTRICTED",  # Permet cartes ET PayPal
-                        "brand_name": "Dino Challenge",
-                        "locale": "fr-CH",
-                        "landing_page": "GUEST_CHECKOUT",  # Permet paiement sans compte
-                        "shipping_preference": "NO_SHIPPING",
-                        "user_action": "PAY_NOW",
-                        "return_url": f"https://dinochallenge-bot.onrender.com/payment-success?telegram_id={telegram_id}",
-                        "cancel_url": f"{GAME_URL}?payment=cancelled"
-                    }
-                }
+            "application_context": {
+                "brand_name": "Dino Challenge",
+                "locale": "fr-CH",
+                "landing_page": "GUEST_CHECKOUT",  # Permet paiement sans compte PayPal
+                "shipping_preference": "NO_SHIPPING",
+                "user_action": "PAY_NOW",
+                "payment_method": {
+                    "paypal_preference": "UNRESTRICTED"  # Permet cartes ET PayPal
+                },
+                "return_url": f"https://dinochallenge-bot.onrender.com/payment-success?telegram_id={telegram_id}",
+                "cancel_url": f"{GAME_URL}?payment=cancelled"
             }
         }
         
+        logger.info(f"🔄 Création commande PayPal pour {telegram_id} - {amount} {currency}")
         response = requests.post(url, headers=headers, json=order_data)
         
         if response.status_code == 201:
             order = response.json()
             logger.info(f"✅ Commande PayPal créée: {order['id']}")
+            # Vérifier que les liens utilisent le bon environnement
+            for link in order.get('links', []):
+                if link.get('rel') == 'approve':
+                    approve_url = link.get('href', '')
+                    if PAYPAL_MODE == 'sandbox' and 'sandbox.paypal.com' not in approve_url:
+                        logger.warning(f"⚠️ URL d'approbation incorrecte: {approve_url}")
             return order
         else:
-            logger.error(f"❌ Erreur création commande PayPal: {response.text}")
+            logger.error(f"❌ Erreur création commande PayPal ({response.status_code}): {response.text}")
             return None
             
     except Exception as e:
@@ -1724,11 +1730,30 @@ async def handle_callback_query(bot, callback_query):
         logger.error(f"❌ Erreur callback query: {e}")
 
 async def run_telegram_bot():
-    """Exécuter le bot Telegram avec polling ultra-simple"""
+    """Exécuter le bot Telegram avec polling ultra-simple et protection anti-conflit"""
     try:
         bot = setup_telegram_bot()
         if bot:
             logger.info("🤖 Démarrage du bot Telegram...")
+            
+            # ÉTAPE 1: Nettoyer les anciennes mises à jour pour éviter le conflit 409
+            try:
+                logger.info("🧹 Nettoyage des anciennes mises à jour...")
+                # Récupérer toutes les mises à jour en attente et les marquer comme lues
+                old_updates = await bot.get_updates(timeout=1, limit=100)
+                if old_updates:
+                    last_update_id = old_updates[-1].update_id
+                    # Marquer toutes comme lues en demandant la suivante
+                    await bot.get_updates(offset=last_update_id + 1, timeout=1, limit=1)
+                    logger.info(f"✅ {len(old_updates)} anciennes mises à jour nettoyées")
+                else:
+                    logger.info("✅ Aucune ancienne mise à jour en attente")
+            except Exception as cleanup_error:
+                logger.warning(f"⚠️ Erreur nettoyage (normal): {cleanup_error}")
+            
+            # ÉTAPE 2: Attendre un peu pour laisser les anciennes connexions se fermer
+            logger.info("⏳ Attente de 3 secondes pour éviter les conflits...")
+            await asyncio.sleep(3)
             
             # Configurer les commandes du bot
             from telegram import BotCommand
@@ -1744,10 +1769,12 @@ async def run_telegram_bot():
             await bot.set_my_commands(commands)
             logger.info("✅ Commandes du bot configurées")
             
-            logger.info("🔄 Démarrage du polling ultra-simple...")
+            logger.info("🔄 Démarrage du polling ultra-simple avec protection anti-conflit...")
             
-            # Polling ultra-minimaliste
+            # Polling ultra-minimaliste avec gestion robuste des erreurs
             offset = 0
+            consecutive_409_errors = 0
+            
             while True:
                 try:
                     # Récupérer les mises à jour
@@ -1756,6 +1783,9 @@ async def run_telegram_bot():
                         limit=100,
                         timeout=30
                     )
+                    
+                    # Reset du compteur d'erreurs 409 si succès
+                    consecutive_409_errors = 0
                     
                     for update in updates:
                         offset = update.update_id + 1
@@ -1767,8 +1797,23 @@ async def run_telegram_bot():
                         await asyncio.sleep(1)
                         
                 except Exception as poll_error:
-                    logger.error(f"❌ Erreur polling: {poll_error}")
-                    await asyncio.sleep(5)  # Pause plus longue en cas d'erreur
+                    error_message = str(poll_error)
+                    
+                    # Gestion spécifique des erreurs 409 (conflit)
+                    if "409" in error_message or "Conflict" in error_message:
+                        consecutive_409_errors += 1
+                        logger.error(f"❌ Conflit 409 détecté (tentative {consecutive_409_errors}): {poll_error}")
+                        
+                        if consecutive_409_errors >= 3:
+                            logger.error("🔥 ARRÊT FORCÉ: Trop de conflits 409 consécutifs!")
+                            logger.error("💡 Redémarrez manuellement le service sur Render")
+                            break
+                        
+                        # Attendre plus longtemps en cas de conflit
+                        await asyncio.sleep(15)
+                    else:
+                        logger.error(f"❌ Erreur polling: {poll_error}")
+                        await asyncio.sleep(5)  # Pause plus longue en cas d'erreur
                         
     except Exception as e:
         logger.error(f"❌ Erreur bot Telegram: {e}")
