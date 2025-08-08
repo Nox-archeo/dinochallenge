@@ -64,9 +64,9 @@ web: python bot.py
 ### 3. Variables d'environnement Render
 
 ```
-TELEGRAM_BOT_TOKEN=7961900456:AAE74vPKYN-hPaP5KMZwH_FdD7wcJomEMeM
-PAYPAL_CLIENT_ID=AaAJyRluWJz3jb-I4RxO2aNECXT1ZFrXKrWUb4xxSTakgT_064EMdxIXtt4-Uao0xuPqFsQOeYNLld_G
-PAYPAL_SECRET_KEY=EErXvGqa4rnz-eJkPPs7sYdG435wzXVVKGgpQa8SMNjg_arFfIq9LFyoeCShpcIV7b8rFMta8Z7eV-WA
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+PAYPAL_CLIENT_ID=your_paypal_client_id_here
+PAYPAL_SECRET_KEY=your_paypal_secret_key_here
 PAYPAL_SANDBOX=False
 GAME_URL=https://nox-archeo.github.io/dinochallenge/
 ```
