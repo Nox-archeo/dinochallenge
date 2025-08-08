@@ -227,13 +227,13 @@ class PayPalManager:
                         "items": [{
                             "name": "Dino Challenge - Abonnement Mensuel",
                             "sku": "dino_monthly",
-                            "price": "10.00",
+                            "price": "11.00",
                             "currency": "CHF",
                             "quantity": 1
                         }]
                     },
                     "amount": {
-                        "total": "10.00",
+                        "total": "11.00",
                         "currency": "CHF"
                     },
                     "description": "Abonnement mensuel Dino Challenge"
@@ -299,7 +299,7 @@ class DinoChallengeBot:
             [InlineKeyboardButton("🎮 Jouer au Dino", url="https://nox-archeo.github.io/dinochallenge/")],
             [InlineKeyboardButton("👤 Mon Profil", callback_data="profile")],
             [InlineKeyboardButton("🏆 Classement", callback_data="leaderboard")],
-            [InlineKeyboardButton("💳 S'abonner (10 CHF/mois)", callback_data="subscribe")]
+            [InlineKeyboardButton("💳 S'abonner (11 CHF/mois)", callback_data="subscribe")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -437,7 +437,7 @@ Clique sur "🎮 Jouer au Dino" pour commencer !
 • Accès prioritaire aux nouveautés
 • Support premium
 
-💰 **Prix :** 10 CHF/mois
+💰 **Prix :** 11 CHF/mois
 
 🏆 **Prix mensuels :**
 • 1er : 50 CHF
@@ -515,7 +515,7 @@ Cliquez sur "Payer avec PayPal" pour vous abonner !
             [InlineKeyboardButton("🎮 Jouer au Dino", url="https://nox-archeo.github.io/dinochallenge/")],
             [InlineKeyboardButton("👤 Mon Profil", callback_data="profile")],
             [InlineKeyboardButton("🏆 Classement", callback_data="leaderboard")],
-            [InlineKeyboardButton("💳 S'abonner (10 CHF/mois)", callback_data="subscribe")]
+            [InlineKeyboardButton("💳 S'abonner (11 CHF/mois)", callback_data="subscribe")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         

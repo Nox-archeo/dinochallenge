@@ -1015,11 +1015,12 @@ async def notify_payment_success(telegram_id: int, amount: Decimal, payment_type
             message += f"🔗 Jouez ici : {GAME_URL}\n\n"
             message += f"💡 Pour un accès permanent, choisissez l'abonnement mensuel avec /payment"
         
-        await telegram_app.bot.send_message(
-            chat_id=telegram_id,
-            text=message,
-            parse_mode='Markdown'
-        )
+        if telegram_app:
+            await telegram_app.send_message(
+                chat_id=telegram_id,
+                text=message,
+                parse_mode='Markdown'
+            )
         
     except Exception as e:
         logger.error(f"❌ Erreur notification paiement: {e}")
@@ -1034,11 +1035,12 @@ async def notify_subscription_renewal(telegram_id: int, amount: Decimal):
         message += f"🎮 **Votre accès continue !**\n"
         message += f"🔗 Jouez ici : {GAME_URL}"
         
-        await telegram_app.bot.send_message(
-            chat_id=telegram_id,
-            text=message,
-            parse_mode='Markdown'
-        )
+        if telegram_app:
+            await telegram_app.send_message(
+                chat_id=telegram_id,
+                text=message,
+                parse_mode='Markdown'
+            )
         
     except Exception as e:
         logger.error(f"❌ Erreur notification renouvellement: {e}")
@@ -1061,17 +1063,63 @@ async def notify_new_score(telegram_id: int, score: int):
             message += f"🕒 **Enregistré le :** {datetime.now().strftime('%d/%m/%Y à %H:%M')}\n\n"
             message += f"🏆 Tapez /leaderboard pour voir le classement !"
         
-        await telegram_app.bot.send_message(
-            chat_id=telegram_id,
-            text=message,
-            parse_mode='Markdown'
-        )
+        if telegram_app:
+            await telegram_app.send_message(
+                chat_id=telegram_id,
+                text=message,
+                parse_mode='Markdown'
+            )
     except Exception as e:
         logger.error(f"❌ Erreur notification score: {e}")
 
-async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestionnaire de la commande /start"""
-    user = update.effective_user
+# Ancien handlers supprimés - remplacés par les fonctions manuelles
+
+def setup_telegram_bot():
+    """Configurer le bot Telegram avec approche minimaliste"""
+    global telegram_app
+    
+    if not TELEGRAM_BOT_TOKEN:
+        logger.error("❌ TELEGRAM_BOT_TOKEN manquant !")
+        return None
+    
+    # Approche minimaliste - créer seulement le Bot, pas d'Application
+    from telegram import Bot
+    telegram_app = Bot(token=TELEGRAM_BOT_TOKEN)
+    
+    logger.info("✅ Bot Telegram configuré (mode minimal)")
+    return telegram_app
+
+async def process_update_manually(bot, update):
+    """Traiter manuellement les mises à jour"""
+    try:
+        if update.message:
+            # Messages texte
+            text = update.message.text
+            user = update.message.from_user
+            
+            if text == '/start':
+                await handle_start_command(bot, update.message)
+            elif text == '/payment':
+                await handle_payment_command(bot, update.message)
+            elif text == '/leaderboard':
+                await handle_leaderboard_command(bot, update.message)
+            elif text == '/profile':
+                await handle_profile_command(bot, update.message)
+            elif text == '/cancel_subscription':
+                await handle_cancel_subscription_command(bot, update.message)
+            elif text == '/help':
+                await handle_help_command(bot, update.message)
+                
+        elif update.callback_query:
+            # Callbacks des boutons
+            await handle_callback_query(bot, update.callback_query)
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur traitement update: {e}")
+
+async def handle_start_command(bot, message):
+    """Gérer la commande /start"""
+    user = message.from_user
     
     # Créer ou récupérer l'utilisateur
     db_user = db.create_or_get_user(
@@ -1083,7 +1131,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Vérifier l'accès
     has_access = db.check_user_access(user.id)
     
-    message = f"""🦕 **Bienvenue dans le Dino Challenge !**
+    text = f"""🦕 **Bienvenue dans le Dino Challenge !**
 
 👋 Salut {user.first_name} !
 
@@ -1108,25 +1156,79 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 """
     
     if has_access:
-        message += f"✅ **Vous avez accès ce mois !**\n"
-        message += f"🔗 **Jouez maintenant :** {GAME_URL}"
+        text += f"✅ **Vous avez accès ce mois !**\n"
+        text += f"🔗 **Jouez maintenant :** {GAME_URL}"
     else:
-        message += f"⚠️ **Payez pour participer :** /payment\n"
-        message += f"🎮 **Démo gratuite :** {GAME_URL}"
+        text += f"⚠️ **Payez pour participer :** /payment\n"
+        text += f"🎮 **Démo gratuite :** {GAME_URL}"
     
-    await update.message.reply_text(message, parse_mode='Markdown')
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text,
+        parse_mode='Markdown'
+    )
 
-async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Afficher le classement"""
+async def handle_payment_command(bot, message):
+    """Gérer la commande /payment"""
+    user = message.from_user
+    
+    # Vérifier si l'utilisateur a déjà payé ce mois
+    has_access = db.check_user_access(user.id)
+    
+    if has_access:
+        text = f"✅ **Vous avez déjà accès ce mois !**\n\n"
+        text += f"🎮 Jouez ici : {GAME_URL}\n"
+        text += f"🏆 Consultez le classement avec /leaderboard"
+        
+        await bot.send_message(
+            chat_id=message.chat_id,
+            text=text,
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Proposer les options de paiement
+    text = f"💰 **PARTICIPER AU DINO CHALLENGE**\n\n"
+    text += f"🎯 **Choisissez votre option de paiement :**\n\n"
+    text += f"**💳 Paiement Unique (11 CHF)**\n"
+    text += f"• Accès pour le mois en cours uniquement\n"
+    text += f"• À renouveler chaque mois manuellement\n\n"
+    text += f"**🔄 Abonnement Mensuel (11 CHF/mois)**\n"
+    text += f"• Accès permanent avec renouvellement automatique\n"
+    text += f"• Annulable à tout moment\n"
+    text += f"• Plus pratique, jamais d'interruption !\n\n"
+    text += f"🏆 **Prix mensuels distribués au top 3 !**"
+    
+    # Créer les boutons inline manuellement
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [
+        [InlineKeyboardButton("💳 Paiement Unique - 11 CHF", callback_data=f"pay_once_{user.id}")],
+        [InlineKeyboardButton("🔄 Abonnement Mensuel - 11 CHF/mois", callback_data=f"pay_subscription_{user.id}")],
+        [InlineKeyboardButton("❌ Annuler", callback_data="cancel_payment")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def handle_leaderboard_command(bot, message):
+    """Gérer la commande /leaderboard"""
     try:
         current_month = datetime.now().strftime('%Y-%m')
         leaderboard = db.get_leaderboard(current_month, 10)
         
         if not leaderboard:
-            await update.message.reply_text("🏆 Aucun score enregistré ce mois-ci.")
+            await bot.send_message(
+                chat_id=message.chat_id,
+                text="🏆 Aucun score enregistré ce mois-ci."
+            )
             return
         
-        message = f"🏆 **CLASSEMENT - {datetime.now().strftime('%B %Y')}**\n\n"
+        text = f"🏆 **CLASSEMENT - {datetime.now().strftime('%B %Y')}**\n\n"
         
         medals = ['🥇', '🥈', '🥉'] + ['🏅'] * 7
         
@@ -1136,20 +1238,27 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             score = player['best_score']
             games = player['total_games']
             
-            message += f"{medal} **#{i+1} - {name}**\n"
-            message += f"   📊 {score:,} pts ({games} parties)\n\n"
+            text += f"{medal} **#{i+1} - {name}**\n"
+            text += f"   📊 {score:,} pts ({games} parties)\n\n"
         
-        message += f"🎮 Jouez ici : {GAME_URL}"
+        text += f"🎮 Jouez ici : {GAME_URL}"
         
-        await update.message.reply_text(message, parse_mode='Markdown')
+        await bot.send_message(
+            chat_id=message.chat_id,
+            text=text,
+            parse_mode='Markdown'
+        )
         
     except Exception as e:
         logger.error(f"❌ Erreur affichage classement: {e}")
-        await update.message.reply_text("❌ Erreur lors de la récupération du classement.")
+        await bot.send_message(
+            chat_id=message.chat_id,
+            text="❌ Erreur lors de la récupération du classement."
+        )
 
-async def profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Afficher le profil utilisateur"""
-    user = update.effective_user
+async def handle_profile_command(bot, message):
+    """Gérer la commande /profile"""
+    user = message.from_user
     db_user = db.create_or_get_user(user.id, user.username, user.first_name)
     
     # Récupérer les stats de l'utilisateur
@@ -1176,118 +1285,47 @@ async def profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"❌ Erreur récupération profil: {e}")
     
-    message = f"👤 **PROFIL - {user.first_name}**\n\n"
-    message += f"🆔 **ID Telegram:** {user.id}\n"
-    message += f"📧 **Email:** {db_user.get('email', 'Non configuré')}\n"
-    message += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')}\n\n"
+    text = f"👤 **PROFIL - {user.first_name}**\n\n"
+    text += f"🆔 **ID Telegram:** {user.id}\n"
+    text += f"📧 **Email:** {db_user.get('email', 'Non configuré')}\n"
+    text += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')}\n\n"
     
     if user_scores:
-        message += f"🏆 **TOP 5 DE VOS SCORES CE MOIS:**\n"
+        text += f"🏆 **TOP 5 DE VOS SCORES CE MOIS:**\n"
         for i, score_data in enumerate(user_scores, 1):
             score = dict(score_data)['score']
-            message += f"   {i}. {score:,} points\n"
-        message += f"\n📊 **Total parties:** {len(user_scores)}\n"
+            text += f"   {i}. {score:,} points\n"
+        text += f"\n📊 **Total parties:** {len(user_scores)}\n"
     else:
-        message += "🎮 **Aucun score ce mois-ci**\n"
-        message += f"Jouez ici : {GAME_URL}\n"
+        text += "🎮 **Aucun score ce mois-ci**\n"
+        text += f"Jouez ici : {GAME_URL}\n"
     
-    await update.message.reply_text(message, parse_mode='Markdown')
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text,
+        parse_mode='Markdown'
+    )
 
-async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestionnaire pour les paiements"""
-    user = update.effective_user
+async def handle_cancel_subscription_command(bot, message):
+    """Gérer la commande /cancel_subscription"""
+    text = f"🔄 **Gestion de l'abonnement**\n\n"
+    text += f"Pour annuler votre abonnement PayPal :\n\n"
+    text += f"1. Connectez-vous à votre compte PayPal\n"
+    text += f"2. Allez dans 'Paiements' → 'Abonnements'\n"
+    text += f"3. Trouvez 'Dino Challenge'\n"
+    text += f"4. Cliquez sur 'Annuler l'abonnement'\n\n"
+    text += f"📞 **Besoin d'aide ?** Contactez l'organisateur.\n"
+    text += f"⚠️ L'accès reste valide jusqu'à la fin de la période payée."
     
-    # Vérifier si l'utilisateur a déjà payé ce mois
-    has_access = db.check_user_access(user.id)
-    
-    if has_access:
-        message = f"✅ **Vous avez déjà accès ce mois !**\n\n"
-        message += f"🎮 Jouez ici : {GAME_URL}\n"
-        message += f"🏆 Consultez le classement avec /leaderboard"
-        
-        await update.message.reply_text(message, parse_mode='Markdown')
-        return
-    
-    # Proposer les options de paiement
-    keyboard = [
-        [{"text": "💳 Paiement Unique - 11 CHF", "callback_data": f"pay_once_{user.id}"}],
-        [{"text": "🔄 Abonnement Mensuel - 11 CHF/mois", "callback_data": f"pay_subscription_{user.id}"}],
-        [{"text": "❌ Annuler", "callback_data": "cancel_payment"}]
-    ]
-    
-    message = f"💰 **PARTICIPER AU DINO CHALLENGE**\n\n"
-    message += f"🎯 **Choisissez votre option de paiement :**\n\n"
-    message += f"**💳 Paiement Unique (11 CHF)**\n"
-    message += f"• Accès pour le mois en cours uniquement\n"
-    message += f"• À renouveler chaque mois manuellement\n\n"
-    message += f"**🔄 Abonnement Mensuel (11 CHF/mois)**\n"
-    message += f"• Accès permanent avec renouvellement automatique\n"
-    message += f"• Annulable à tout moment\n"
-    message += f"• Plus pratique, jamais d'interruption !\n\n"
-    message += f"🏆 **Prix mensuels distribués au top 3 !**"
-    
-    inline_keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💳 Paiement Unique - 11 CHF", callback_data=f"pay_once_{user.id}")],
-        [InlineKeyboardButton("🔄 Abonnement Mensuel - 11 CHF/mois", callback_data=f"pay_subscription_{user.id}")],
-        [InlineKeyboardButton("❌ Annuler", callback_data="cancel_payment")]
-    ])
-    
-    await update.message.reply_text(message, parse_mode='Markdown', reply_markup=inline_keyboard)
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text,
+        parse_mode='Markdown'
+    )
 
-async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestionnaire pour les callbacks de paiement"""
-    query = update.callback_query
-    await query.answer()
-    
-    data = query.data
-    
-    if data == "cancel_payment":
-        await query.edit_message_text("❌ **Paiement annulé.**")
-        return
-    
-    if data.startswith("pay_once_"):
-        telegram_id = int(data.replace("pay_once_", ""))
-        payment_url = f"https://dinochallenge-bot.onrender.com/create-payment"
-        
-        message = f"💳 **Paiement Unique - 11 CHF**\n\n"
-        message += f"🔗 **Cliquez ici pour payer :**\n"
-        message += f"[💰 Payer avec PayPal]({payment_url}?telegram_id={telegram_id})\n\n"
-        message += f"📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
-        message += f"✅ Une fois payé, votre accès sera activé automatiquement !"
-        
-        await query.edit_message_text(message, parse_mode='Markdown')
-    
-    elif data.startswith("pay_subscription_"):
-        telegram_id = int(data.replace("pay_subscription_", ""))
-        subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription"
-        
-        message = f"🔄 **Abonnement Mensuel - 11 CHF/mois**\n\n"
-        message += f"🔗 **Cliquez ici pour vous abonner :**\n"
-        message += f"[🔄 S'abonner avec PayPal]({subscription_url}?telegram_id={telegram_id})\n\n"
-        message += f"📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
-        message += f"✅ Accès permanent avec renouvellement automatique !\n"
-        message += f"❌ Annulable à tout moment avec /cancel_subscription"
-        
-        await query.edit_message_text(message, parse_mode='Markdown')
-
-async def cancel_subscription_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Annuler l'abonnement PayPal"""
-    user = update.effective_user
-    
-    message = f"🔄 **Gestion de l'abonnement**\n\n"
-    message += f"Pour annuler votre abonnement PayPal :\n\n"
-    message += f"1. Connectez-vous à votre compte PayPal\n"
-    message += f"2. Allez dans 'Paiements' → 'Abonnements'\n"
-    message += f"3. Trouvez 'Dino Challenge'\n"
-    message += f"4. Cliquez sur 'Annuler l'abonnement'\n\n"
-    message += f"📞 **Besoin d'aide ?** Contactez l'organisateur.\n"
-    message += f"⚠️ L'accès reste valide jusqu'à la fin de la période payée."
-    
-    await update.message.reply_text(message, parse_mode='Markdown')
-
-async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Afficher l'aide"""
-    message = """❓ **AIDE - DINO CHALLENGE**
+async def handle_help_command(bot, message):
+    """Gérer la commande /help"""
+    text = """❓ **AIDE - DINO CHALLENGE**
 
 🎮 **Comment jouer :**
 1. Payez 11 CHF avec /payment pour participer
@@ -1318,104 +1356,117 @@ Prix distribués au top 3 de chaque mois :
 Contactez l'organisateur pour toute question.
 """
     
-    await update.message.reply_text(message, parse_mode='Markdown')
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text,
+        parse_mode='Markdown'
+    )
 
-async def setup_bot_commands():
-    """Configurer les commandes du bot"""
-    commands = [
-        BotCommand("start", "🏠 Menu principal"),
-        BotCommand("payment", "💰 Participer au concours"),
-        BotCommand("leaderboard", "🏆 Classement mensuel"),
-        BotCommand("profile", "👤 Mon profil"),
-        BotCommand("cancel_subscription", "❌ Annuler l'abonnement"),
-        BotCommand("help", "❓ Aide et règles"),
-    ]
-    
-    await telegram_app.bot.set_my_commands(commands)
-    logger.info("✅ Commandes du bot configurées")
-
-def setup_telegram_bot():
-    """Configurer le bot Telegram"""
-    global telegram_app
-    
-    if not TELEGRAM_BOT_TOKEN:
-        logger.error("❌ TELEGRAM_BOT_TOKEN manquant !")
-        return None
-    
-    # Créer l'application bot SANS builder pour éviter les incompatibilités
-    from telegram import Bot
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
-    
-    # Créer l'application manuellement pour éviter l'Updater automatique
-    from telegram.ext import Application
-    telegram_app = Application.builder().token(TELEGRAM_BOT_TOKEN).updater(None).build()
-    
-    # Ajouter les handlers
-    telegram_app.add_handler(CommandHandler("start", start_handler))
-    telegram_app.add_handler(CommandHandler("payment", payment_handler))
-    telegram_app.add_handler(CommandHandler("leaderboard", leaderboard_handler))
-    telegram_app.add_handler(CommandHandler("profile", profile_handler))
-    telegram_app.add_handler(CommandHandler("cancel_subscription", cancel_subscription_handler))
-    telegram_app.add_handler(CommandHandler("help", help_handler))
-    telegram_app.add_handler(CallbackQueryHandler(payment_callback_handler))
-    
-    logger.info("✅ Bot Telegram configuré")
-    return telegram_app
-
-async def run_telegram_bot():
-    """Exécuter le bot Telegram avec méthode alternative"""
+async def handle_callback_query(bot, callback_query):
+    """Gérer les callbacks des boutons"""
     try:
-        app = setup_telegram_bot()
-        if app:
-            await setup_bot_commands()
-            logger.info("🤖 Démarrage du bot Telegram...")
+        await bot.answer_callback_query(callback_query.id)
+        
+        data = callback_query.data
+        
+        if data == "cancel_payment":
+            await bot.edit_message_text(
+                chat_id=callback_query.message.chat_id,
+                message_id=callback_query.message.message_id,
+                text="❌ **Paiement annulé.**",
+                parse_mode='Markdown'
+            )
+            return
+        
+        if data.startswith("pay_once_"):
+            telegram_id = int(data.replace("pay_once_", ""))
+            payment_url = f"https://dinochallenge-bot.onrender.com/create-payment"
             
-            # Initialiser l'application
-            await app.initialize()
-            await app.start()
+            text = f"💳 **Paiement Unique - 11 CHF**\n\n"
+            text += f"🔗 **Cliquez ici pour payer :**\n"
+            text += f"[💰 Payer avec PayPal]({payment_url}?telegram_id={telegram_id})\n\n"
+            text += f"📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
+            text += f"✅ Une fois payé, votre accès sera activé automatiquement !"
             
-            # Créer un polling manuel ultra-simple
-            from telegram.ext import Updater
-            try:
-                # Essayer avec Updater minimal
-                from telegram import Update
-                import asyncio
-                
-                logger.info("🔄 Démarrage du polling manuel...")
-                
-                # Polling manuel minimaliste
-                offset = 0
-                while True:
-                    try:
-                        # Récupérer les mises à jour
-                        updates = await app.bot.get_updates(
-                            offset=offset,
-                            limit=100,
-                            timeout=30
-                        )
-                        
-                        for update in updates:
-                            offset = update.update_id + 1
-                            # Traiter l'update
-                            await app.process_update(update)
-                        
-                        # Petite pause pour éviter la surcharge
-                        if not updates:
-                            await asyncio.sleep(1)
-                            
-                    except Exception as poll_error:
-                        logger.error(f"❌ Erreur polling: {poll_error}")
-                        await asyncio.sleep(5)  # Pause plus longue en cas d'erreur
-                        
-            except KeyboardInterrupt:
-                logger.info("🛑 Arrêt du bot demandé")
-            finally:
-                await app.stop()
-                await app.shutdown()
+            await bot.edit_message_text(
+                chat_id=callback_query.message.chat_id,
+                message_id=callback_query.message.message_id,
+                text=text,
+                parse_mode='Markdown'
+            )
+        
+        elif data.startswith("pay_subscription_"):
+            telegram_id = int(data.replace("pay_subscription_", ""))
+            subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription"
+            
+            text = f"🔄 **Abonnement Mensuel - 11 CHF/mois**\n\n"
+            text += f"🔗 **Cliquez ici pour vous abonner :**\n"
+            text += f"[🔄 S'abonner avec PayPal]({subscription_url}?telegram_id={telegram_id})\n\n"
+            text += f"📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
+            text += f"✅ Accès permanent avec renouvellement automatique !\n"
+            text += f"❌ Annulable à tout moment avec /cancel_subscription"
+            
+            await bot.edit_message_text(
+                chat_id=callback_query.message.chat_id,
+                message_id=callback_query.message.message_id,
+                text=text,
+                parse_mode='Markdown'
+            )
             
     except Exception as e:
+        logger.error(f"❌ Erreur callback query: {e}")
+
+async def run_telegram_bot():
+    """Exécuter le bot Telegram avec polling ultra-simple"""
+    try:
+        bot = setup_telegram_bot()
+        if bot:
+            logger.info("🤖 Démarrage du bot Telegram...")
+            
+            # Configurer les commandes du bot
+            commands = [
+                {"command": "start", "description": "🏠 Menu principal"},
+                {"command": "payment", "description": "💰 Participer au concours"},
+                {"command": "leaderboard", "description": "🏆 Classement mensuel"},
+                {"command": "profile", "description": "👤 Mon profil"},
+                {"command": "cancel_subscription", "description": "❌ Annuler l'abonnement"},
+                {"command": "help", "description": "❓ Aide et règles"},
+            ]
+            
+            await bot.set_my_commands([
+                {"command": cmd["command"], "description": cmd["description"]} 
+                for cmd in commands
+            ])
+            logger.info("✅ Commandes du bot configurées")
+            
+            logger.info("🔄 Démarrage du polling ultra-simple...")
+            
+            # Polling ultra-minimaliste
+            offset = 0
+            while True:
+                try:
+                    # Récupérer les mises à jour
+                    updates = await bot.get_updates(
+                        offset=offset,
+                        limit=100,
+                        timeout=30
+                    )
+                    
+                    for update in updates:
+                        offset = update.update_id + 1
+                        # Traiter l'update manuellement
+                        await process_update_manually(bot, update)
+                    
+                    # Petite pause pour éviter la surcharge
+                    if not updates:
+                        await asyncio.sleep(1)
+                        
+                except Exception as poll_error:
+                    logger.error(f"❌ Erreur polling: {poll_error}")
+                    await asyncio.sleep(5)  # Pause plus longue en cas d'erreur
+                        
+    except Exception as e:
         logger.error(f"❌ Erreur bot Telegram: {e}")
-        import traceback
         logger.error(f"❌ Traceback: {traceback.format_exc()}")
 
 def run_flask_app():
