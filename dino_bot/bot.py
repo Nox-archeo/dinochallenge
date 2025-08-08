@@ -16,6 +16,7 @@ import schedule
 import time
 from datetime import datetime
 from dotenv import load_dotenv
+from threading import Thread
 
 from telegram import Update, BotCommand
 from telegram.ext import (
@@ -389,9 +390,11 @@ Email configuré : `{player.get('paypal_email', 'Non configuré')}`
             logger.info("🦕 Démarrage du Dino Challenge Bot...")
             
             # Démarrer le scheduler en arrière-plan
-            import threading
-            scheduler_thread = threading.Thread(target=self._run_scheduler, daemon=True)
+            scheduler_thread = Thread(target=self._run_scheduler, daemon=True)
             scheduler_thread.start()
+            
+            # Pour Render : démarrer un serveur HTTP simple en arrière-plan
+            self._start_health_server()
             
             # Démarrer le bot directement avec run_polling (synchrone)
             self.application.run_polling(
@@ -403,6 +406,42 @@ Email configuré : `{player.get('paypal_email', 'Non configuré')}`
             logger.info("🛑 Arrêt du bot demandé par l'utilisateur")
         except Exception as e:
             logger.error(f"❌ Erreur fatale: {e}")
+
+    def _start_health_server(self):
+        """Démarre un serveur HTTP simple pour Render (health check)"""
+        try:
+            from http.server import HTTPServer, SimpleHTTPRequestHandler
+            import threading
+            
+            class HealthHandler(SimpleHTTPRequestHandler):
+                def do_GET(self):
+                    if self.path == '/health':
+                        self.send_response(200)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(b'{"status": "ok", "bot": "running"}')
+                    else:
+                        self.send_response(200)
+                        self.send_header('Content-type', 'text/html')
+                        self.end_headers()
+                        self.wfile.write(b'<h1>Dino Challenge Bot is running!</h1><p>Bot status: Active</p>')
+                        
+                def log_message(self, format, *args):
+                    return  # Supprimer les logs HTTP
+            
+            port = int(os.getenv('PORT', 10000))  # Render utilise PORT
+            server = HTTPServer(('0.0.0.0', port), HealthHandler)
+            
+            def run_server():
+                logger.info(f"🌐 Serveur HTTP démarré sur le port {port}")
+                server.serve_forever()
+            
+            thread = threading.Thread(target=run_server, daemon=True)
+            thread.start()
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Impossible de démarrer le serveur HTTP: {e}")
+            logger.info("🤖 Le bot fonctionnera sans serveur HTTP")
 
 def main():
     """Point d'entrée principal"""
