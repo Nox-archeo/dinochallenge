@@ -33,8 +33,20 @@ import requests
 from decimal import Decimal
 
 # Imports pour la base de données
-import psycopg2
-from psycopg2.extras import RealDictCursor
+try:
+    # Essayer psycopg3 en premier (plus récent)
+    import psycopg
+    from psycopg.rows import dict_row
+    PSYCOPG_VERSION = 3
+except ImportError:
+    try:
+        # Fallback vers psycopg2
+        import psycopg2 as psycopg
+        from psycopg2.extras import RealDictCursor
+        PSYCOPG_VERSION = 2
+    except ImportError:
+        raise ImportError("Installer psycopg ou psycopg2-binary")
+
 import sqlite3
 from urllib.parse import urlparse
 
@@ -44,6 +56,12 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Log de la version psycopg utilisée
+if PSYCOPG_VERSION == 3:
+    logger.info("🔹 Utilisation de psycopg3")
+else:
+    logger.info("🔹 Utilisation de psycopg2")
 
 # Configuration depuis les variables d'environnement
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -85,7 +103,12 @@ class DatabaseManager:
     def get_connection(self):
         """Obtenir une connexion à la base de données"""
         if self.is_postgres:
-            return psycopg2.connect(self.database_url, cursor_factory=RealDictCursor)
+            if PSYCOPG_VERSION == 3:
+                # psycopg3 syntax
+                return psycopg.connect(self.database_url, row_factory=dict_row)
+            else:
+                # psycopg2 syntax (fallback)
+                return psycopg.connect(self.database_url, cursor_factory=RealDictCursor)
         else:
             # SQLite
             db_path = self.database_url.replace('sqlite:///', '').replace('sqlite://', '')
