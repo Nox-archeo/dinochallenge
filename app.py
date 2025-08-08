@@ -713,7 +713,7 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
                     "experience_context": {
                         "brand_name": "Dino Challenge",
                         "locale": "fr-CH",
-                        "landing_page": "BILLING",  # Page de facturation optimisée
+                        "landing_page": "NO_PREFERENCE",  # Laisse PayPal choisir automatiquement
                         "shipping_preference": "NO_SHIPPING",
                         "user_action": "PAY_NOW",
                         "payment_method_preference": "UNRESTRICTED",  # Permet tous types de paiements
