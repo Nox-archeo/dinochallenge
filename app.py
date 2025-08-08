@@ -74,25 +74,27 @@ ORGANIZER_CHAT_ID = int(os.getenv('ORGANIZER_CHAT_ID', '123456789'))
 PORT = int(os.getenv('PORT', 5000))
 GAME_URL = os.getenv('GAME_URL', 'https://nox-archeo.github.io/dinochallenge/')
 
-# Configuration PayPal
+# Configuration PayPal - MODE PRODUCTION
 PAYPAL_CLIENT_ID = os.getenv('PAYPAL_CLIENT_ID')
 PAYPAL_SECRET_KEY = os.getenv('PAYPAL_SECRET_KEY')
-PAYPAL_MODE = os.getenv('PAYPAL_MODE', 'sandbox')  # 'sandbox' ou 'live'
+PAYPAL_MODE = os.getenv('PAYPAL_MODE', 'live')  # 'live' par défaut = PRODUCTION
 PAYPAL_WEBHOOK_URL = 'https://dinochallenge-bot.onrender.com/paypal-webhook'
 
-# URLs PayPal API v2
-PAYPAL_BASE_URL = 'https://api-m.sandbox.paypal.com' if PAYPAL_MODE == 'sandbox' else 'https://api-m.paypal.com'
+# URLs PayPal API v2 - PRODUCTION
+PAYPAL_BASE_URL = 'https://api-m.paypal.com' if PAYPAL_MODE == 'live' else 'https://api-m.sandbox.paypal.com'
 
 # Prix en CHF (taxes incluses)
 MONTHLY_PRICE_CHF = Decimal('11.00')
 
-# Configuration PayPal SDK (pour la compatibilité)
+# Configuration PayPal SDK (pour la compatibilité) - MODE PRODUCTION
 if PAYPAL_CLIENT_ID and PAYPAL_SECRET_KEY:
     paypalrestsdk.configure({
-        "mode": PAYPAL_MODE,
+        "mode": PAYPAL_MODE,  # Utilise 'live' par défaut
         "client_id": PAYPAL_CLIENT_ID,
         "client_secret": PAYPAL_SECRET_KEY
     })
+    logger.info(f"🏭 PayPal configuré en mode: {PAYPAL_MODE.upper()}")
+    logger.info(f"🔗 Base URL PayPal: {PAYPAL_BASE_URL}")
 
 # Variables globales
 telegram_app = None
@@ -724,12 +726,16 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
         if response.status_code == 201:
             order = response.json()
             logger.info(f"✅ Commande PayPal créée: {order['id']}")
-            # Vérifier que les liens utilisent le bon environnement
+            # Vérifier que les liens utilisent l'environnement PRODUCTION
             for link in order.get('links', []):
                 if link.get('rel') == 'approve':
                     approve_url = link.get('href', '')
-                    if PAYPAL_MODE == 'sandbox' and 'sandbox.paypal.com' not in approve_url:
-                        logger.warning(f"⚠️ URL d'approbation incorrecte: {approve_url}")
+                    if PAYPAL_MODE == 'live' and 'paypal.com' in approve_url and 'sandbox' not in approve_url:
+                        logger.info(f"✅ URL d'approbation PRODUCTION: {approve_url}")
+                    elif PAYPAL_MODE == 'sandbox' and 'sandbox.paypal.com' in approve_url:
+                        logger.info(f"✅ URL d'approbation SANDBOX: {approve_url}")
+                    else:
+                        logger.warning(f"⚠️ URL d'approbation inattendue: {approve_url}")
             return order
         else:
             logger.error(f"❌ Erreur création commande PayPal ({response.status_code}): {response.text}")
