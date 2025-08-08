@@ -20,8 +20,8 @@ services:
         value: live
       - key: GAME_URL
         value: https://nox-archeo.github.io/dinochallenge/
-      - key: PYTHON_VERSION
-        value: 3.10.13
+      - key: PORT
+        value: 10000
     plan: free
     healthCheckPath: /health
     autoDeploy: true
