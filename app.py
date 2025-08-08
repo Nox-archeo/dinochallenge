@@ -12,6 +12,8 @@ import os
 import logging
 import asyncio
 import re
+import sqlite3
+import traceback
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict
 import json
@@ -1340,13 +1342,13 @@ def setup_telegram_bot():
         logger.error("❌ TELEGRAM_BOT_TOKEN manquant !")
         return None
     
-    # Créer l'application bot avec paramètres spécifiques
-    telegram_app = (
-        Application.builder()
-        .token(TELEGRAM_BOT_TOKEN)
-        .concurrent_updates(True)
-        .build()
-    )
+    # Créer l'application bot SANS builder pour éviter les incompatibilités
+    from telegram import Bot
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    
+    # Créer l'application manuellement pour éviter l'Updater automatique
+    from telegram.ext import Application
+    telegram_app = Application.builder().token(TELEGRAM_BOT_TOKEN).updater(None).build()
     
     # Ajouter les handlers
     telegram_app.add_handler(CommandHandler("start", start_handler))
@@ -1361,15 +1363,55 @@ def setup_telegram_bot():
     return telegram_app
 
 async def run_telegram_bot():
-    """Exécuter le bot Telegram avec méthode simple"""
+    """Exécuter le bot Telegram avec méthode alternative"""
     try:
         app = setup_telegram_bot()
         if app:
             await setup_bot_commands()
             logger.info("🤖 Démarrage du bot Telegram...")
             
-            # Méthode ultra-simple compatible python-telegram-bot 20.6
-            await app.run_polling()
+            # Initialiser l'application
+            await app.initialize()
+            await app.start()
+            
+            # Créer un polling manuel ultra-simple
+            from telegram.ext import Updater
+            try:
+                # Essayer avec Updater minimal
+                from telegram import Update
+                import asyncio
+                
+                logger.info("🔄 Démarrage du polling manuel...")
+                
+                # Polling manuel minimaliste
+                offset = 0
+                while True:
+                    try:
+                        # Récupérer les mises à jour
+                        updates = await app.bot.get_updates(
+                            offset=offset,
+                            limit=100,
+                            timeout=30
+                        )
+                        
+                        for update in updates:
+                            offset = update.update_id + 1
+                            # Traiter l'update
+                            await app.process_update(update)
+                        
+                        # Petite pause pour éviter la surcharge
+                        if not updates:
+                            await asyncio.sleep(1)
+                            
+                    except Exception as poll_error:
+                        logger.error(f"❌ Erreur polling: {poll_error}")
+                        await asyncio.sleep(5)  # Pause plus longue en cas d'erreur
+                        
+            except KeyboardInterrupt:
+                logger.info("🛑 Arrêt du bot demandé")
+            finally:
+                await app.stop()
+                await app.shutdown()
             
     except Exception as e:
         logger.error(f"❌ Erreur bot Telegram: {e}")
