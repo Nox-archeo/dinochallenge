@@ -708,18 +708,19 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
                 },
                 "description": f"Dino Challenge - Accès mensuel pour {datetime.now().strftime('%B %Y')}"
             }],
-            "application_context": {
-                "brand_name": "Dino Challenge",
-                "locale": "fr-CH",
-                "landing_page": "GUEST_CHECKOUT",  # Vraie page guest checkout pour cartes
-                "shipping_preference": "NO_SHIPPING",
-                "user_action": "PAY_NOW",
-                "payment_method": {
-                    "payer_selected": "PAYPAL",
-                    "payee_preferred": "UNRESTRICTED"  # Permet cartes ET PayPal
-                },
-                "return_url": f"https://dinochallenge-bot.onrender.com/payment-success?telegram_id={telegram_id}",
-                "cancel_url": f"{GAME_URL}?payment=cancelled"
+            "payment_source": {
+                "paypal": {
+                    "experience_context": {
+                        "brand_name": "Dino Challenge",
+                        "locale": "fr-CH",
+                        "landing_page": "BILLING",  # Page de facturation optimisée
+                        "shipping_preference": "NO_SHIPPING",
+                        "user_action": "PAY_NOW",
+                        "payment_method_preference": "UNRESTRICTED",  # Permet tous types de paiements
+                        "return_url": f"https://dinochallenge-bot.onrender.com/payment-success?telegram_id={telegram_id}",
+                        "cancel_url": f"{GAME_URL}?payment=cancelled"
+                    }
+                }
             }
         }
         
