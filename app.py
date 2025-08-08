@@ -1361,6 +1361,101 @@ def setup_telegram_bot():
     return telegram_app
 
 async def run_telegram_bot():
+    """Exécuter le bot Telegram avec méthode simple"""
+    try:
+        app = setup_telegram_bot()
+        if app:
+            await setup_bot_commands()
+            logger.info("🤖 Démarrage du bot Telegram...")
+            
+            # Méthode ultra-simple compatible python-telegram-bot 20.6
+            await app.run_polling()
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur bot Telegram: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+
+def run_flask_app():
+    """Exécuter l'API Flask avec Gunicorn en production"""
+    try:
+        port = int(os.environ.get('PORT', 5000))
+        logger.info(f"🌐 Démarrage de l'API Flask sur le port {port}...")
+        
+        # En production, ne pas utiliser flask.run() directement
+        # Gunicorn gérera le serveur via wsgi.py
+        if os.environ.get('RENDER'):
+            logger.info("🏭 Mode production détecté - utilisation Gunicorn")
+            # En production sur Render, l'app sera lancée via Gunicorn
+            return
+        else:
+            # En développement local uniquement
+            flask_app.run(host='0.0.0.0', port=port, debug=False)
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur API Flask: {e}")
+
+# =============================================================================
+# MAIN - POINT D'ENTRÉE
+# =============================================================================
+
+def main():
+    """Point d'entrée principal"""
+    logger.info("🦕 Démarrage du Dino Challenge Bot + API")
+    
+    # Vérifier les variables d'environnement
+    if not TELEGRAM_BOT_TOKEN:
+        logger.error("❌ TELEGRAM_BOT_TOKEN manquant dans .env")
+        return
+    
+    logger.info(f"📊 Base de données: {DATABASE_URL}")
+    logger.info(f"🎮 Jeu: {GAME_URL}")
+    logger.info(f"👤 Admin: {ORGANIZER_CHAT_ID}")
+    
+    # Vérifier si on est en mode production Render
+    is_render_production = os.environ.get('RENDER') == 'true'
+    
+    try:
+        if is_render_production:
+            logger.info("🏭 Mode production Render détecté")
+            
+            # En production : seulement le bot Telegram
+            # L'API sera servie par un autre service ou Gunicorn
+            logger.info("🤖 Démarrage du bot Telegram en mode production")
+            asyncio.run(run_telegram_bot())
+            
+        else:
+            logger.info("🔧 Mode développement local")
+            
+            # Démarrer Flask dans un thread séparé
+            flask_thread = threading.Thread(target=run_flask_app, daemon=True)
+            flask_thread.start()
+            logger.info("✅ API Flask démarrée en arrière-plan")
+            
+            # Démarrer le bot Telegram (bloquant)
+            asyncio.run(run_telegram_bot())
+        
+    except KeyboardInterrupt:
+        logger.info("🛑 Arrêt demandé par l'utilisateur")
+    except Exception as e:
+        logger.error(f"❌ Erreur fatale: {e}")
+
+if __name__ == '__main__':
+    main()
+    
+    # Ajouter les handlers
+    telegram_app.add_handler(CommandHandler("start", start_handler))
+    telegram_app.add_handler(CommandHandler("payment", payment_handler))
+    telegram_app.add_handler(CommandHandler("leaderboard", leaderboard_handler))
+    telegram_app.add_handler(CommandHandler("profile", profile_handler))
+    telegram_app.add_handler(CommandHandler("cancel_subscription", cancel_subscription_handler))
+    telegram_app.add_handler(CommandHandler("help", help_handler))
+    telegram_app.add_handler(CallbackQueryHandler(payment_callback_handler))
+    
+    logger.info("✅ Bot Telegram configuré")
+    return telegram_app
+
+async def run_telegram_bot():
     """Exécuter le bot Telegram"""
     try:
         app = setup_telegram_bot()
