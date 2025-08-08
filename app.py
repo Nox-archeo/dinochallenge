@@ -14,6 +14,8 @@ import asyncio
 import re
 import sqlite3
 import traceback
+import fcntl  # Pour le verrouillage de fichier
+import tempfile
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict
 import json
@@ -709,12 +711,9 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
             "application_context": {
                 "brand_name": "Dino Challenge",
                 "locale": "fr-CH",
-                "landing_page": "GUEST_CHECKOUT",  # Permet paiement sans compte PayPal
+                "landing_page": "LOGIN",  # Page de connexion standard PayPal
                 "shipping_preference": "NO_SHIPPING",
                 "user_action": "PAY_NOW",
-                "payment_method": {
-                    "paypal_preference": "UNRESTRICTED"  # Permet cartes ET PayPal
-                },
                 "return_url": f"https://dinochallenge-bot.onrender.com/payment-success?telegram_id={telegram_id}",
                 "cancel_url": f"{GAME_URL}?payment=cancelled"
             }
@@ -1736,30 +1735,41 @@ async def handle_callback_query(bot, callback_query):
         logger.error(f"❌ Erreur callback query: {e}")
 
 async def run_telegram_bot():
-    """Exécuter le bot Telegram avec polling ultra-simple et protection anti-conflit"""
+    """Exécuter le bot Telegram avec protection anti-conflit et verrouillage"""
+    
+    # PROTECTION ANTI-DOUBLON : Créer un fichier de verrouillage
+    lock_file = None
     try:
+        lock_file_path = os.path.join(tempfile.gettempdir(), 'dinochallenge_bot.lock')
+        lock_file = open(lock_file_path, 'w')
+        
+        try:
+            # Tentative de verrouillage exclusif (non-bloquant)
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            logger.info("🔒 Verrou obtenu - Instance unique confirmée")
+        except IOError:
+            logger.error("🔥 ARRÊT : Une autre instance du bot tourne déjà !")
+            logger.error("💡 Arrêtez l'autre instance avant de redémarrer")
+            return
+        
         bot = setup_telegram_bot()
         if bot:
             logger.info("🤖 Démarrage du bot Telegram...")
             
-            # ÉTAPE 1: Nettoyer les anciennes mises à jour pour éviter le conflit 409
+            # ÉTAPE 1: Nettoyer les anciennes mises à jour de TOUTES les instances
             try:
-                logger.info("🧹 Nettoyage des anciennes mises à jour...")
-                # Récupérer toutes les mises à jour en attente et les marquer comme lues
-                old_updates = await bot.get_updates(timeout=1, limit=100)
-                if old_updates:
-                    last_update_id = old_updates[-1].update_id
-                    # Marquer toutes comme lues en demandant la suivante
-                    await bot.get_updates(offset=last_update_id + 1, timeout=1, limit=1)
-                    logger.info(f"✅ {len(old_updates)} anciennes mises à jour nettoyées")
-                else:
-                    logger.info("✅ Aucune ancienne mise à jour en attente")
+                logger.info("🧹 Nettoyage RADICAL des mises à jour...")
+                
+                # Méthode 1: Utiliser un offset très élevé pour ignorer toutes les anciennes mises à jour
+                await bot.get_updates(offset=-1, timeout=1, limit=1)
+                logger.info("✅ Toutes les anciennes mises à jour ignorées")
+                
+                # Méthode 2: Attendre que toutes les autres connexions se ferment
+                logger.info("⏳ Attente de fermeture des autres connexions...")
+                await asyncio.sleep(10)  # Attendre plus longtemps
+                
             except Exception as cleanup_error:
-                logger.warning(f"⚠️ Erreur nettoyage (normal): {cleanup_error}")
-            
-            # ÉTAPE 2: Attendre un peu pour laisser les anciennes connexions se fermer
-            logger.info("⏳ Attente de 3 secondes pour éviter les conflits...")
-            await asyncio.sleep(3)
+                logger.warning(f"⚠️ Erreur nettoyage (peut être normal): {cleanup_error}")
             
             # Configurer les commandes du bot
             from telegram import BotCommand
@@ -1775,23 +1785,30 @@ async def run_telegram_bot():
             await bot.set_my_commands(commands)
             logger.info("✅ Commandes du bot configurées")
             
-            logger.info("🔄 Démarrage du polling ultra-simple avec protection anti-conflit...")
+            logger.info("🔄 Démarrage du polling avec verrouillage...")
             
-            # Polling ultra-minimaliste avec gestion robuste des erreurs
+            # Polling avec protection maximale contre les conflits
             offset = 0
             consecutive_409_errors = 0
+            last_successful_update = datetime.now()
             
             while True:
                 try:
-                    # Récupérer les mises à jour
+                    # Vérifier que le verrou est toujours actif
+                    if not lock_file or lock_file.closed:
+                        logger.error("🔒 Verrou perdu - Arrêt du bot")
+                        break
+                    
+                    # Récupérer les mises à jour avec timeout court
                     updates = await bot.get_updates(
                         offset=offset,
                         limit=100,
-                        timeout=30
+                        timeout=10  # Timeout plus court pour détecter les conflits rapidement
                     )
                     
                     # Reset du compteur d'erreurs 409 si succès
                     consecutive_409_errors = 0
+                    last_successful_update = datetime.now()
                     
                     for update in updates:
                         offset = update.update_id + 1
@@ -1800,7 +1817,7 @@ async def run_telegram_bot():
                     
                     # Petite pause pour éviter la surcharge
                     if not updates:
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(2)
                         
                 except Exception as poll_error:
                     error_message = str(poll_error)
@@ -1810,20 +1827,36 @@ async def run_telegram_bot():
                         consecutive_409_errors += 1
                         logger.error(f"❌ Conflit 409 détecté (tentative {consecutive_409_errors}): {poll_error}")
                         
-                        if consecutive_409_errors >= 3:
-                            logger.error("🔥 ARRÊT FORCÉ: Trop de conflits 409 consécutifs!")
-                            logger.error("💡 Redémarrez manuellement le service sur Render")
+                        if consecutive_409_errors >= 2:  # Réduit à 2 tentatives
+                            logger.error("🔥 ARRÊT IMMÉDIAT: Conflit persistant détecté!")
+                            logger.error("💡 Autre instance toujours active - Arrêtez tout sur Render")
                             break
                         
                         # Attendre plus longtemps en cas de conflit
-                        await asyncio.sleep(15)
+                        await asyncio.sleep(30)
                     else:
                         logger.error(f"❌ Erreur polling: {poll_error}")
-                        await asyncio.sleep(5)  # Pause plus longue en cas d'erreur
+                        await asyncio.sleep(5)
+                    
+                    # Vérifier si on est bloqué depuis trop longtemps
+                    time_since_success = datetime.now() - last_successful_update
+                    if time_since_success.total_seconds() > 300:  # 5 minutes
+                        logger.error("🔥 ARRÊT: Aucune mise à jour réussie depuis 5 minutes")
+                        break
                         
     except Exception as e:
         logger.error(f"❌ Erreur bot Telegram: {e}")
         logger.error(f"❌ Traceback: {traceback.format_exc()}")
+    
+    finally:
+        # Libérer le verrou
+        if lock_file and not lock_file.closed:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                lock_file.close()
+                logger.info("🔓 Verrou libéré")
+            except:
+                pass
 
 def run_flask_app():
     """Exécuter l'API Flask"""
