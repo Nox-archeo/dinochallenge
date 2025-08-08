@@ -1366,10 +1366,21 @@ async def run_telegram_bot():
         logger.error(f"❌ Erreur bot Telegram: {e}")
 
 def run_flask_app():
-    """Exécuter l'API Flask"""
+    """Exécuter l'API Flask avec Gunicorn en production"""
     try:
-        logger.info(f"🌐 Démarrage de l'API Flask sur le port {PORT}...")
-        flask_app.run(host='0.0.0.0', port=PORT, debug=False)
+        port = int(os.environ.get('PORT', 5000))
+        logger.info(f"🌐 Démarrage de l'API Flask sur le port {port}...")
+        
+        # En production, ne pas utiliser flask.run() directement
+        # Gunicorn gérera le serveur via wsgi.py
+        if os.environ.get('RENDER'):
+            logger.info("🏭 Mode production détecté - utilisation Gunicorn")
+            # En production sur Render, l'app sera lancée via Gunicorn
+            return
+        else:
+            # En développement local uniquement
+            flask_app.run(host='0.0.0.0', port=port, debug=False)
+            
     except Exception as e:
         logger.error(f"❌ Erreur API Flask: {e}")
 
