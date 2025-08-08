@@ -23,7 +23,7 @@ from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMar
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
 # Imports pour l'API web
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, redirect
 from flask_cors import CORS
 import threading
 import time
@@ -648,15 +648,24 @@ def get_leaderboard():
 # ENDPOINTS PAYPAL
 # =============================================================================
 
-@flask_app.route('/create-payment', methods=['POST'])
+@flask_app.route('/create-payment', methods=['GET', 'POST'])
 def create_payment():
     """Créer un paiement unique PayPal"""
     try:
-        data = request.get_json()
-        telegram_id = data.get('telegram_id')
-        
-        if not telegram_id:
-            return jsonify({'error': 'telegram_id requis'}), 400
+        # Gérer les requêtes GET (depuis les liens Telegram)
+        if request.method == 'GET':
+            telegram_id = request.args.get('telegram_id')
+            if not telegram_id:
+                return jsonify({'error': 'telegram_id requis'}), 400
+            # Traiter comme une requête POST avec les données de l'URL
+            data = {'telegram_id': telegram_id}
+        else:
+            # Requête POST normale
+            data = request.get_json()
+            telegram_id = data.get('telegram_id')
+            
+            if not telegram_id:
+                return jsonify({'error': 'telegram_id requis'}), 400
         
         # Créer le paiement PayPal
         payment = paypalrestsdk.Payment({
@@ -694,6 +703,11 @@ def create_payment():
                     approval_url = link.href
                     break
             
+            # Si c'est une requête GET, rediriger directement vers PayPal
+            if request.method == 'GET':
+                return redirect(approval_url)
+            
+            # Si c'est une requête POST, retourner le JSON
             return jsonify({
                 'payment_id': payment.id,
                 'approval_url': approval_url,
@@ -707,15 +721,24 @@ def create_payment():
         logger.error(f"❌ Erreur endpoint create-payment: {e}")
         return jsonify({'error': str(e)}), 500
 
-@flask_app.route('/create-subscription', methods=['POST'])
+@flask_app.route('/create-subscription', methods=['GET', 'POST'])
 def create_subscription():
     """Créer un abonnement mensuel PayPal"""
     try:
-        data = request.get_json()
-        telegram_id = data.get('telegram_id')
-        
-        if not telegram_id:
-            return jsonify({'error': 'telegram_id requis'}), 400
+        # Gérer les requêtes GET (depuis les liens Telegram)
+        if request.method == 'GET':
+            telegram_id = request.args.get('telegram_id')
+            if not telegram_id:
+                return jsonify({'error': 'telegram_id requis'}), 400
+            # Traiter comme une requête POST avec les données de l'URL
+            data = {'telegram_id': telegram_id}
+        else:
+            # Requête POST normale
+            data = request.get_json()
+            telegram_id = data.get('telegram_id')
+            
+            if not telegram_id:
+                return jsonify({'error': 'telegram_id requis'}), 400
         
         # Créer le plan d'abonnement (si pas déjà créé)
         plan_id = create_billing_plan()
@@ -743,6 +766,11 @@ def create_subscription():
                     approval_url = link.href
                     break
             
+            # Si c'est une requête GET, rediriger directement vers PayPal
+            if request.method == 'GET':
+                return redirect(approval_url)
+            
+            # Si c'est une requête POST, retourner le JSON
             return jsonify({
                 'agreement_id': billing_agreement.id,
                 'approval_url': approval_url,
