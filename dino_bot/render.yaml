@@ -1,21 +1,25 @@
 services:
   - type: web
-    name: dino-challenge-bot
+    name: dino-challenge-bot-api
     runtime: python
     region: frankfurt
     buildCommand: pip install -r requirements.txt
-    startCommand: python bot.py
+    startCommand: python app.py
     envVars:
       - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
         sync: false
       - key: ORGANIZER_CHAT_ID
         sync: false
       - key: PAYPAL_CLIENT_ID
         sync: false
-      - key: PAYPAL_CLIENT_SECRET
+      - key: PAYPAL_SECRET_KEY
         sync: false
       - key: PAYPAL_MODE
-        value: sandbox
+        value: live
+      - key: GAME_URL
+        value: https://nox-archeo.github.io/dinochallenge/
       - key: PYTHON_VERSION
         value: 3.10.13
     plan: free

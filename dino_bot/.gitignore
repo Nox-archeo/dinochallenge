@@ -1,4 +1,3 @@
-# Variables d'environnement
 # Variables d'environnement - CRITIQUES À NE JAMAIS COMMITER
 .env
 .env.local
@@ -9,6 +8,7 @@
 data/users.json
 data/scores.json
 data/payments.json
+data/*.json
 
 # Cache Python
 __pycache__/
@@ -31,6 +31,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Tests et debugging
 .pytest_cache/
@@ -66,60 +67,5 @@ logs/
 # Temporary files
 *.tmp
 *.temp
-
-# Données utilisateur (fichiers JSON)
-data/*.json
-
-# Logs
-logs/
-*.log
-
-# Cache Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Tests
-.coverage
-.pytest_cache/
-.tox/
-.coverage
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Backup files
 *.bak
 *.backup
-*.tmp
