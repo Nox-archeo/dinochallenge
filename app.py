@@ -776,10 +776,11 @@ def create_payment():
         order = create_paypal_order(int(telegram_id), MONTHLY_PRICE_CHF)
         
         if order:
-            # Trouver l'URL d'approbation
+            # Trouver l'URL d'approbation (peut être 'approve' ou 'payer-action')
             approval_url = None
             for link in order.get('links', []):
-                if link.get('rel') == 'approve':
+                rel = link.get('rel')
+                if rel == 'approve' or rel == 'payer-action':
                     approval_url = link.get('href')
                     break
             
