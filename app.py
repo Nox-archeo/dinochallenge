@@ -659,6 +659,11 @@ def get_leaderboard():
 def get_paypal_access_token():
     """Obtenir un token d'accès PayPal"""
     try:
+        logger.info(f"🔍 Demande token PayPal - Mode: {PAYPAL_MODE}")
+        logger.info(f"🔍 URL: {PAYPAL_BASE_URL}/v1/oauth2/token")
+        logger.info(f"🔍 Client ID présent: {'Oui' if PAYPAL_CLIENT_ID else 'Non'}")
+        logger.info(f"🔍 Secret présent: {'Oui' if PAYPAL_SECRET_KEY else 'Non'}")
+        
         url = f"{PAYPAL_BASE_URL}/v1/oauth2/token"
         
         headers = {
@@ -669,25 +674,36 @@ def get_paypal_access_token():
         auth = (PAYPAL_CLIENT_ID, PAYPAL_SECRET_KEY)
         data = {'grant_type': 'client_credentials'}
         
+        logger.info(f"🔄 Envoi requête token PayPal...")
         response = requests.post(url, headers=headers, data=data, auth=auth)
         
+        logger.info(f"📥 Réponse token - Status: {response.status_code}")
+        logger.info(f"📥 Réponse token - Content: {response.text}")
+        
         if response.status_code == 200:
-            return response.json().get('access_token')
+            token = response.json().get('access_token')
+            logger.info(f"✅ Token PayPal obtenu avec succès")
+            return token
         else:
             logger.error(f"❌ Erreur token PayPal: {response.text}")
             return None
             
     except Exception as e:
         logger.error(f"❌ Erreur get_paypal_access_token: {e}")
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         return None
 
 def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'):
     """Créer une commande PayPal v2 (supporte cartes bancaires)"""
     try:
+        logger.info(f"🔍 Début création commande PayPal - telegram_id: {telegram_id}, amount: {amount}")
+        
         access_token = get_paypal_access_token()
         if not access_token:
             logger.error("❌ Token PayPal manquant")
             return None
+        
+        logger.info(f"✅ Token PayPal obtenu: {access_token[:20]}...")
         
         url = f"{PAYPAL_BASE_URL}/v2/checkout/orders"
         
@@ -724,8 +740,15 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
             }
         }
         
-        logger.info(f"🔄 Création commande PayPal pour {telegram_id} - {amount} {currency}")
+        logger.info(f"🔄 Envoi requête PayPal vers: {url}")
+        logger.info(f"🔄 Headers: {headers}")
+        logger.info(f"🔄 Data: {json.dumps(order_data, indent=2)}")
+        
         response = requests.post(url, headers=headers, json=order_data)
+        
+        logger.info(f"📥 Réponse PayPal - Status: {response.status_code}")
+        logger.info(f"📥 Réponse PayPal - Headers: {dict(response.headers)}")
+        logger.info(f"📥 Réponse PayPal - Content: {response.text}")
         
         if response.status_code == 201:
             order = response.json()
@@ -747,6 +770,7 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
             
     except Exception as e:
         logger.error(f"❌ Erreur create_paypal_order: {e}")
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         return None
 
 # =============================================================================
