@@ -4,7 +4,7 @@ services:
     runtime: python
     region: frankfurt
     buildCommand: pip install -r requirements-alt.txt
-    startCommand: python bot.py
+    startCommand: python app.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.12
