@@ -750,19 +750,25 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
         logger.info(f"📥 Réponse PayPal - Headers: {dict(response.headers)}")
         logger.info(f"📥 Réponse PayPal - Content: {response.text}")
         
-        if response.status_code == 201:
+        # PayPal peut renvoyer 200 ou 201 pour une commande créée avec succès
+        if response.status_code in [200, 201]:
             order = response.json()
-            logger.info(f"✅ Commande PayPal créée: {order['id']}")
+            order_id = order.get('id')
+            order_status = order.get('status')
+            
+            logger.info(f"✅ Commande PayPal créée: {order_id} - Status: {order_status}")
+            
             # Vérifier que les liens utilisent l'environnement PRODUCTION
             for link in order.get('links', []):
-                if link.get('rel') == 'approve':
+                rel = link.get('rel')
+                if rel in ['approve', 'payer-action']:
                     approve_url = link.get('href', '')
                     if PAYPAL_MODE == 'live' and 'paypal.com' in approve_url and 'sandbox' not in approve_url:
-                        logger.info(f"✅ URL d'approbation PRODUCTION: {approve_url}")
+                        logger.info(f"✅ URL d'approbation PRODUCTION ({rel}): {approve_url}")
                     elif PAYPAL_MODE == 'sandbox' and 'sandbox.paypal.com' in approve_url:
-                        logger.info(f"✅ URL d'approbation SANDBOX: {approve_url}")
+                        logger.info(f"✅ URL d'approbation SANDBOX ({rel}): {approve_url}")
                     else:
-                        logger.warning(f"⚠️ URL d'approbation inattendue: {approve_url}")
+                        logger.warning(f"⚠️ URL d'approbation inattendue ({rel}): {approve_url}")
             return order
         else:
             logger.error(f"❌ Erreur création commande PayPal ({response.status_code}): {response.text}")
