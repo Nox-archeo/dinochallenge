@@ -280,6 +280,38 @@ class DatabaseManager:
                     logger.info("✅ Migration display_name terminée")
                 except Exception as migration_error:
                     logger.info(f"Migration display_name ignorée: {migration_error}")
+
+                # Migration : ajouter les colonnes manquantes dans la table payments
+                try:
+                    if self.is_postgres:
+                        # Ajouter payment_type si elle n'existe pas
+                        cursor.execute("""
+                            ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_type VARCHAR(20) DEFAULT 'one_time'
+                        """)
+                        # Ajouter paypal_payment_id si elle n'existe pas
+                        cursor.execute("""
+                            ALTER TABLE payments ADD COLUMN IF NOT EXISTS paypal_payment_id VARCHAR(255)
+                        """)
+                        # Ajouter paypal_subscription_id si elle n'existe pas
+                        cursor.execute("""
+                            ALTER TABLE payments ADD COLUMN IF NOT EXISTS paypal_subscription_id VARCHAR(255)
+                        """)
+                    else:
+                        # Pour SQLite, vérifier les colonnes de payments
+                        cursor.execute("PRAGMA table_info(payments)")
+                        columns = [column[1] for column in cursor.fetchall()]
+                        
+                        if 'payment_type' not in columns:
+                            cursor.execute("ALTER TABLE payments ADD COLUMN payment_type TEXT DEFAULT 'one_time'")
+                        if 'paypal_payment_id' not in columns:
+                            cursor.execute("ALTER TABLE payments ADD COLUMN paypal_payment_id TEXT")
+                        if 'paypal_subscription_id' not in columns:
+                            cursor.execute("ALTER TABLE payments ADD COLUMN paypal_subscription_id TEXT")
+                    
+                    conn.commit()
+                    logger.info("✅ Migration table payments terminée")
+                except Exception as migration_error:
+                    logger.info(f"Migration payments ignorée: {migration_error}")
                 
         except Exception as e:
             logger.error(f"❌ Erreur initialisation base de données: {e}")
@@ -1829,7 +1861,7 @@ async def notify_new_score(telegram_id: int, score: int):
             message = f"🎮 **Score enregistré !**\n\n"
             message += f"📊 **Score :** {score:,} points\n\n"
             message += f"⚠️ **Accès limité** - Pour participer au concours mensuel :\n"
-            message += f"💰 Payez 11 CHF avec /payment\n"
+            message += f"💰 Payez {MONTHLY_PRICE_CHF} CHF avec /payment\n"
             message += f"🏆 Tentez de gagner les prix mensuels !"
         else:
             message = f"🎮 **Nouveau score enregistré !**\n\n"
@@ -2319,8 +2351,8 @@ async def handle_play_game(bot, message):
 ⚠️ **Accès requis pour le mode compétition**
 
 💰 **Deux options de participation :**
-• 💳 **Paiement unique** : 11 CHF pour le mois en cours
-• 🔄 **Abonnement mensuel** : 11 CHF/mois automatique
+• 💳 **Paiement unique** : {MONTHLY_PRICE_CHF} CHF pour le mois en cours
+• 🔄 **Abonnement mensuel** : {MONTHLY_PRICE_CHF} CHF/mois automatique
 
 ✅ **Avantages :**
 • Scores comptabilisés dans le classement
@@ -2390,7 +2422,7 @@ async def handle_play_command(bot, message):
 
 👋 Salut {user.first_name} !
 
-⚠️ Pour jouer en mode compétition et gagner des prix, vous devez d'abord participer au concours (11 CHF).
+⚠️ Pour jouer en mode compétition et gagner des prix, vous devez d'abord participer au concours ({MONTHLY_PRICE_CHF} CHF).
 
 🆓 **En attendant :** Vous pouvez essayer le jeu en mode démo
 💰 **Pour concourir :** Payez votre participation mensuelle
@@ -2398,7 +2430,7 @@ async def handle_play_command(bot, message):
 """
 
         keyboard = [
-            [InlineKeyboardButton("💰 PARTICIPER (11 CHF)", callback_data="payment")],
+            [InlineKeyboardButton(f"💰 PARTICIPER ({MONTHLY_PRICE_CHF} CHF)", callback_data="payment")],
             [InlineKeyboardButton("🆓 Essayer en mode démo", url=f"{GAME_URL}?mode=demo")],
             [
                 InlineKeyboardButton("🏆 Voir le classement", callback_data="leaderboard"),
@@ -2436,7 +2468,7 @@ async def handle_start_command(bot, message):
 🎮 **Le jeu Chrome Dino avec des vrais prix !**
 🏆 Concours mensuel avec redistribution des gains
 
-💰 **Participation : 11 CHF**
+💰 **Participation : {MONTHLY_PRICE_CHF} CHF**
 • Paiement unique pour le mois en cours
 • OU abonnement mensuel automatique
 
@@ -2474,7 +2506,7 @@ async def handle_start_command(bot, message):
         keyboard = [
             [
                 InlineKeyboardButton("👤 Mon Profil", callback_data="profile"),
-                InlineKeyboardButton("💰 Participer (11 CHF)", callback_data="payment")
+                InlineKeyboardButton("💰 Participer ({MONTHLY_PRICE_CHF} CHF)", callback_data="payment")
             ],
             [
                 InlineKeyboardButton("� Démo Gratuite", url=f"{GAME_URL}?mode=demo"),
@@ -2685,7 +2717,7 @@ async def handle_profile_command(bot, message):
     if has_access:
         keyboard.append([InlineKeyboardButton("🎮 Jouer au Dino Challenge", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition")])
     else:
-        keyboard.append([InlineKeyboardButton("💰 Payer ma participation (11 CHF)", callback_data="payment")])
+        keyboard.append([InlineKeyboardButton(f"💰 Payer ma participation ({MONTHLY_PRICE_CHF} CHF)", callback_data="payment")])
     
     # Boutons de gestion du profil
     keyboard.append([
