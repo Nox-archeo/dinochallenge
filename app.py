@@ -85,8 +85,8 @@ PAYPAL_WEBHOOK_URL = 'https://dinochallenge-bot.onrender.com/paypal-webhook'
 # URLs PayPal API v2 - PRODUCTION
 PAYPAL_BASE_URL = 'https://api-m.paypal.com' if PAYPAL_MODE == 'live' else 'https://api-m.sandbox.paypal.com'
 
-# Prix en CHF (taxes incluses)
-MONTHLY_PRICE_CHF = Decimal('11.00')
+# Prix en CHF (taxes incluses) - MODE TEST
+MONTHLY_PRICE_CHF = Decimal('0.05')  # TEMPORAIRE POUR TESTS - Normalement 11.00 CHF
 
 # État des utilisateurs pour les conversations (édition profil)
 user_states = {}
@@ -2097,7 +2097,7 @@ async def handle_callback_query(bot, callback_query):
             telegram_id = int(data.replace("pay_once_", ""))
             payment_url = f"https://dinochallenge-bot.onrender.com/create-payment"
             
-            text = f"💳 **Paiement Unique - 11 CHF**\n\n"
+            text = f"💳 **Paiement Unique - {MONTHLY_PRICE_CHF} CHF**\n\n"
             text += f"🔗 **Cliquez ici pour payer :**\n"
             text += f"[💰 Payer avec PayPal]({payment_url}?telegram_id={telegram_id})\n\n"
             text += f"📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
@@ -2114,7 +2114,7 @@ async def handle_callback_query(bot, callback_query):
             telegram_id = int(data.replace("pay_subscription_", ""))
             subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription"
             
-            text = f"🔄 **Abonnement Mensuel - 11 CHF/mois**\n\n"
+            text = f"🔄 **Abonnement Mensuel - {MONTHLY_PRICE_CHF} CHF/mois**\n\n"
             text += f"🔗 **Cliquez ici pour vous abonner :**\n"
             text += f"[🔄 S'abonner avec PayPal]({subscription_url}?telegram_id={telegram_id})\n\n"
             text += f"📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
@@ -2530,10 +2530,10 @@ async def handle_payment_command(bot, message):
     # Proposer les options de paiement
     text = f"💰 **PARTICIPER AU DINO CHALLENGE**\n\n"
     text += f"🎯 **Choisissez votre option de paiement :**\n\n"
-    text += f"**💳 Paiement Unique (11 CHF)**\n"
+    text += f"**💳 Paiement Unique ({MONTHLY_PRICE_CHF} CHF)**\n"
     text += f"• Accès pour le mois en cours uniquement\n"
     text += f"• À renouveler chaque mois manuellement\n\n"
-    text += f"**🔄 Abonnement Mensuel (11 CHF/mois)**\n"
+    text += f"**🔄 Abonnement Mensuel ({MONTHLY_PRICE_CHF} CHF/mois)**\n"
     text += f"• Accès permanent avec renouvellement automatique\n"
     text += f"• Annulable à tout moment\n"
     text += f"• Plus pratique, jamais d'interruption !\n\n"
@@ -2542,8 +2542,8 @@ async def handle_payment_command(bot, message):
     # Créer les boutons inline manuellement
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     keyboard = [
-        [InlineKeyboardButton("💳 Paiement Unique - 11 CHF", callback_data=f"pay_once_{user.id}")],
-        [InlineKeyboardButton("🔄 Abonnement Mensuel - 11 CHF/mois", callback_data=f"pay_subscription_{user.id}")],
+        [InlineKeyboardButton(f"💳 Paiement Unique - {MONTHLY_PRICE_CHF} CHF", callback_data=f"pay_once_{user.id}")],
+        [InlineKeyboardButton(f"🔄 Abonnement Mensuel - {MONTHLY_PRICE_CHF} CHF/mois", callback_data=f"pay_subscription_{user.id}")],
         [InlineKeyboardButton("❌ Annuler", callback_data="cancel_payment")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2727,7 +2727,7 @@ async def handle_help_command(bot, message):
 Le concours mensuel du célèbre jeu Chrome Dino Runner !
 
 🎮 **Comment jouer :**
-1. Payez 11 CHF avec /payment pour participer
+1. Payez {MONTHLY_PRICE_CHF} CHF avec /payment pour participer
 2. Recevez le lien du jeu sécurisé
 3. Utilisez ESPACE ou FLÈCHE HAUT pour sauter
 4. Évitez les obstacles le plus longtemps possible
@@ -2739,8 +2739,8 @@ Le concours mensuel du célèbre jeu Chrome Dino Runner !
 • Scores validés automatiquement depuis le jeu
 
 💰 **Options de participation :**
-• **Paiement unique :** 11 CHF - Accès pour le mois en cours
-• **Abonnement :** 11 CHF/mois - Accès permanent automatique
+• **Paiement unique :** {MONTHLY_PRICE_CHF} CHF - Accès pour le mois en cours
+• **Abonnement :** {MONTHLY_PRICE_CHF} CHF/mois - Accès permanent automatique
 
 🏆 **Prix du concours mensuel :**
 Les gains sont calculés sur la cagnotte totale :
