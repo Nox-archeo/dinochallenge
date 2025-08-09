@@ -1280,9 +1280,12 @@ def capture_payment():
     try:
         data = request.get_json()
         order_id = data.get('order_id')
+        telegram_id_from_request = data.get('telegram_id')  # ID reçu depuis le frontend
         
         if not order_id:
             return jsonify({'error': 'order_id requis'}), 400
+        
+        logger.info(f"🔍 Capture paiement - order_id: {order_id}, telegram_id_request: {telegram_id_from_request}")
         
         # Capturer le paiement
         access_token = get_paypal_access_token()
@@ -1307,13 +1310,27 @@ def capture_payment():
             capture = purchase_unit.get('payments', {}).get('captures', [{}])[0]
             amount = Decimal(capture.get('amount', {}).get('value', '0'))
             
-            # Extraire telegram_id depuis reference_id
-            reference_id = purchase_unit.get('reference_id', '')
+            # Prioriser le telegram_id reçu depuis le frontend, sinon extraire du reference_id
             telegram_id = None
-            if reference_id.startswith('dino_monthly_'):
-                telegram_id = int(reference_id.replace('dino_monthly_', ''))
+            if telegram_id_from_request:
+                try:
+                    telegram_id = int(telegram_id_from_request)
+                    logger.info(f"✅ Utilisation telegram_id depuis requête: {telegram_id}")
+                except (ValueError, TypeError):
+                    logger.warning(f"⚠️ telegram_id invalide depuis requête: {telegram_id_from_request}")
+            
+            # Fallback: extraire depuis reference_id si pas fourni en requête
+            if not telegram_id:
+                reference_id = purchase_unit.get('reference_id', '')
+                if reference_id.startswith('dino_monthly_'):
+                    try:
+                        telegram_id = int(reference_id.replace('dino_monthly_', ''))
+                        logger.info(f"✅ Utilisation telegram_id depuis reference_id: {telegram_id}")
+                    except ValueError:
+                        logger.error(f"❌ reference_id invalide: {reference_id}")
             
             if telegram_id and amount >= MONTHLY_PRICE_CHF:
+                logger.info(f"🔄 Enregistrement paiement: {telegram_id} = {amount} CHF")
                 # Enregistrer le paiement
                 success = db.record_payment(
                     telegram_id=telegram_id,
@@ -1460,7 +1477,8 @@ def payment_success():
                             'Content-Type': 'application/json',
                         }},
                         body: JSON.stringify({{
-                            order_id: '{token}'
+                            order_id: '{token}',
+                            telegram_id: '{telegram_id}'
                         }})
                     }});
                     
