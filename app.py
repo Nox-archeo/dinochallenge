@@ -2188,6 +2188,10 @@ async def handle_callback_query(bot, callback_query):
         elif data == "payment":
             await handle_payment_command(bot, callback_query.message)
         
+        elif data == "help":
+            # Afficher l'aide complète
+            await handle_help_command(bot, callback_query.message)
+        
         elif data == "setup_profile":
             # Démarrer la configuration pour un nouvel utilisateur
             await start_user_setup(bot, callback_query.message)
@@ -2715,43 +2719,99 @@ async def handle_cancel_subscription_command(bot, message):
 
 async def handle_help_command(bot, message):
     """Gérer la commande /help"""
-    text = """❓ **AIDE - DINO CHALLENGE**
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    text = """❓ **AIDE & RÈGLES - DINO CHALLENGE**
+
+🦕 **Bienvenue dans le Dino Challenge !**
+Le concours mensuel du célèbre jeu Chrome Dino Runner !
 
 🎮 **Comment jouer :**
 1. Payez 11 CHF avec /payment pour participer
-2. Cliquez sur le lien du jeu
+2. Recevez le lien du jeu sécurisé
 3. Utilisez ESPACE ou FLÈCHE HAUT pour sauter
 4. Évitez les obstacles le plus longtemps possible
-5. Soumettez votre score avec `/score VOTRE_SCORE`
+5. Vos scores sont automatiquement enregistrés depuis le jeu
 
-💰 **Options de paiement :**
-• **Paiement unique :** Accès pour le mois en cours
-• **Abonnement :** Accès permanent avec renouvellement automatique
+🚫 **NOUVEAU : Scores automatiques uniquement !**
+• Plus de soumission manuelle (anti-triche)
+• Maximum 5 parties par jour par joueur
+• Scores validés automatiquement depuis le jeu
 
-🏆 **Concours mensuel :**
-Prix distribués au top 3 de chaque mois :
-• 🥇 1er : 40% de la cagnotte
-• 🥈 2e : 15% de la cagnotte  
-• 🥉 3e : 5% de la cagnotte
-(40% restants pour les frais d'organisation)
+💰 **Options de participation :**
+• **Paiement unique :** 11 CHF - Accès pour le mois en cours
+• **Abonnement :** 11 CHF/mois - Accès permanent automatique
 
-📋 **Commandes :**
-/start - Menu principal
+🏆 **Prix du concours mensuel :**
+Les gains sont calculés sur la cagnotte totale :
+• 🥇 **1ère place :** 40% de la cagnotte
+• 🥈 **2e place :** 15% de la cagnotte  
+• 🥉 **3e place :** 5% de la cagnotte
+• ⚙️ Organisation : 40% (frais techniques et gestion)
+
+💸 **Paiement des gains :**
+• Versement automatique chaque 1er du mois
+• Transfert direct sur votre compte PayPal
+• Notification personnalisée aux gagnants
+
+📋 **Commandes disponibles :**
+/start - Menu principal avec boutons
 /payment - Participer au concours
-/leaderboard - Classement mensuel
-/profile - Mon profil et statistiques
-/score NOMBRE - Soumettre un score (ex: /score 1234)
+/leaderboard - Classement temps réel
+/profile - Gérer mon profil et PayPal
+/support - Support technique direct
 /cancel_subscription - Annuler l'abonnement
-/help - Cette aide
+/help - Cette aide complète
 
-🎯 **Support :**
-Contactez l'organisateur pour toute question.
-"""
+🔒 **Sécurité & Fair-Play :**
+• Système anti-triche intégré
+• Validation des scores automatique
+• Limite de 5 parties/jour/joueur
+• Accès premium vérifié pour chaque partie
+
+📅 **Calendrier mensuel :**
+• Concours du 1er au dernier jour du mois
+• Notification des gagnants le 1er du mois suivant
+• Reset automatique du classement
+• Nouveau concours commence immédiatement
+
+🆘 **Support technique :**
+👤 **@Nox_archeo** (Organisateur officiel)
+📧 Disponible 7j/7 pour toute question
+
+⚡ **Système automatisé :**
+• Tout est géré automatiquement
+• Pas d'intervention manuelle nécessaire
+• Transparence totale des résultats
+• Paiements rapides et sécurisés
+
+🎯 **Astuce :** Configurez votre email PayPal dans /profile pour recevoir vos gains automatiquement !"""
+
+    # Ajouter des boutons pour actions rapides
+    keyboard = [
+        [
+            InlineKeyboardButton("🎮 Jouer maintenant", url=GAME_URL),
+            InlineKeyboardButton("💰 Participer", callback_data="payment")
+        ],
+        [
+            InlineKeyboardButton("🏆 Classement", callback_data="leaderboard"),
+            InlineKeyboardButton("👤 Mon profil", callback_data="profile")
+        ],
+        [
+            InlineKeyboardButton("🆘 Support @Nox_archeo", url="https://t.me/Nox_archeo"),
+        ],
+        [
+            InlineKeyboardButton("🏠 Retour au menu", callback_data="start")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=reply_markup
     )
 
 async def handle_support_command(bot, message):
