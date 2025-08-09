@@ -3407,6 +3407,91 @@ def main():
     except Exception as e:
         logger.error(f"❌ Erreur fatale: {e}")
 
+# =============================================================================
+# COMMANDES D'ADMINISTRATION
+# =============================================================================
+
+@flask_app.route('/admin/grant-access/<int:telegram_id>', methods=['GET'])
+def admin_grant_access(telegram_id):
+    """Donner accès manuellement à un utilisateur (pour les cas de paiement non détecté)"""
+    try:
+        # Vérifier l'autorisation (simple protection)
+        auth_key = request.args.get('key')
+        if auth_key != 'dino2025admin':  # Clé simple pour urgence
+            return jsonify({'error': 'Non autorisé'}), 403
+        
+        # Enregistrer un paiement manuel
+        success = db.record_payment(
+            telegram_id=telegram_id,
+            amount=MONTHLY_PRICE_CHF,
+            payment_type='manual_admin',
+            paypal_payment_id=f'ADMIN_{int(time.time())}'
+        )
+        
+        if success:
+            logger.info(f"🔧 ADMIN: Accès accordé manuellement à {telegram_id}")
+            return jsonify({
+                'success': True,
+                'message': f'Accès accordé à l\'utilisateur {telegram_id}',
+                'telegram_id': telegram_id
+            })
+        else:
+            return jsonify({'error': 'Erreur lors de l\'enregistrement'}), 500
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur admin grant access: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@flask_app.route('/admin/check-access/<int:telegram_id>', methods=['GET'])
+def admin_check_access(telegram_id):
+    """Vérifier l'accès d'un utilisateur"""
+    try:
+        has_access = db.check_user_access(telegram_id)
+        user_profile = db.get_user_profile(telegram_id)
+        
+        # Récupérer les paiements de l'utilisateur
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM payments WHERE telegram_id = %s ORDER BY payment_date DESC
+            """ if db.is_postgres else """
+                SELECT * FROM payments WHERE telegram_id = ? ORDER BY payment_date DESC
+            """, (telegram_id,))
+            payments = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify({
+            'telegram_id': telegram_id,
+            'has_access': has_access,
+            'user_profile': user_profile,
+            'payments': payments
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur admin check access: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@flask_app.route('/admin/recent-payments', methods=['GET'])
+def admin_recent_payments():
+    """Voir les paiements récents"""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM payments 
+                ORDER BY payment_date DESC 
+                LIMIT 20
+            """)
+            payments = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify({
+            'recent_payments': payments,
+            'count': len(payments)
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur admin recent payments: {e}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     main()
 
