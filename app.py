@@ -2404,10 +2404,11 @@ async def run_telegram_bot():
             except Exception as cleanup_error:
                 logger.warning(f"⚠️ Erreur nettoyage (peut être normal): {cleanup_error}")
             
-            # Configurer les commandes du bot (ne garder que /start)
+            # Configurer les commandes du bot (menu hamburger)
             from telegram import BotCommand
             commands = [
                 BotCommand("start", "🏠 Menu principal"),
+                BotCommand("help", "❓ Aide et règles"),
             ]
             
             await bot.set_my_commands(commands)
