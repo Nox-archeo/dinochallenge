@@ -367,13 +367,26 @@ class DatabaseManager:
             if not has_access:
                 return {'success': False, 'error': 'Accès premium requis'}
             
-            # Vérifier la limite de 5 parties par jour
+            # Ajouter le score AVANT de vérifier la limite (pour permettre exactement 5 parties)
             today = datetime.now().date()
+            current_month = datetime.now().strftime('%Y-%m')
             
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Compter les parties d'aujourd'hui
+                # Ajouter le score en premier
+                if self.is_postgres:
+                    cursor.execute("""
+                        INSERT INTO scores (user_id, telegram_id, score, month_year)
+                        VALUES (%s, %s, %s, %s)
+                    """, (user['id'], telegram_id, score, current_month))
+                else:
+                    cursor.execute("""
+                        INSERT INTO scores (user_id, telegram_id, score, month_year)
+                        VALUES (?, ?, ?, ?)
+                    """, (user['id'], telegram_id, score, current_month))
+                
+                # Maintenant compter les parties d'aujourd'hui (incluant celle qu'on vient d'ajouter)
                 cursor.execute("""
                     SELECT COUNT(*) FROM scores 
                     WHERE telegram_id = %s AND DATE(created_at) = %s
@@ -392,31 +405,25 @@ class DatabaseManager:
                 else:
                     daily_games = 0
                 
-                if daily_games >= 5:
-                    return {'success': False, 'error': 'Limite quotidienne atteinte (5 parties/jour)'}
-                
-                # Ajouter le score
-                current_month = datetime.now().strftime('%Y-%m')
-                
-                if self.is_postgres:
-                    cursor.execute("""
-                        INSERT INTO scores (user_id, telegram_id, score, month_year)
-                        VALUES (%s, %s, %s, %s)
-                    """, (user['id'], telegram_id, score, current_month))
-                else:
-                    cursor.execute("""
-                        INSERT INTO scores (user_id, telegram_id, score, month_year)
-                        VALUES (?, ?, ?, ?)
-                    """, (user['id'], telegram_id, score, current_month))
-                
                 conn.commit()
-                logger.info(f"✅ Score ajouté: {telegram_id} = {score} (partie {daily_games + 1}/5)")
+                logger.info(f"✅ Score ajouté: {telegram_id} = {score} (partie {daily_games}/5)")
                 
-                return {
-                    'success': True, 
-                    'daily_games': daily_games + 1,
-                    'remaining_games': 4 - daily_games
-                }
+                # Vérifier si c'était la 5ème partie
+                if daily_games >= 5:
+                    return {
+                        'success': True, 
+                        'daily_games': daily_games,
+                        'remaining_games': 0,
+                        'limit_reached': True,
+                        'message': 'Limite quotidienne atteinte ! Revenez demain pour 5 nouvelles parties.'
+                    }
+                else:
+                    return {
+                        'success': True, 
+                        'daily_games': daily_games,
+                        'remaining_games': 5 - daily_games,
+                        'limit_reached': False
+                    }
                 
         except Exception as e:
             logger.error(f"❌ Erreur ajout score: {e}")
@@ -1089,6 +1096,85 @@ def get_leaderboard():
         
     except Exception as e:
         logger.error(f"❌ Erreur récupération classement: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@flask_app.route('/api/check-access', methods=['GET'])
+def check_game_access():
+    """Vérifier l'accès au jeu et les parties restantes"""
+    try:
+        telegram_id = request.args.get('telegram_id')
+        mode = request.args.get('mode', 'competition')
+        
+        if not telegram_id:
+            return jsonify({'error': 'telegram_id requis'}), 400
+        
+        telegram_id = int(telegram_id)
+        
+        # En mode démo, accès toujours autorisé
+        if mode == 'demo':
+            return jsonify({
+                'access_granted': True,
+                'mode': 'demo',
+                'unlimited': True,
+                'message': 'Mode démo - parties illimitées'
+            })
+        
+        # En mode compétition, vérifier l'accès premium
+        has_premium = db.check_user_access(telegram_id)
+        if not has_premium:
+            return jsonify({
+                'access_granted': False,
+                'mode': 'competition',
+                'error': 'Accès premium requis',
+                'message': 'Vous devez acheter l\'accès premium pour jouer en mode compétition'
+            })
+        
+        # Vérifier les parties restantes aujourd'hui
+        today = datetime.now().date()
+        
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT COUNT(*) FROM scores 
+                WHERE telegram_id = %s AND DATE(created_at) = %s
+            """ if db.is_postgres else """
+                SELECT COUNT(*) FROM scores 
+                WHERE telegram_id = ? AND DATE(created_at) = ?
+            """, (telegram_id, today))
+            
+            result = cursor.fetchone()
+            if result:
+                if isinstance(result, dict):
+                    daily_games = result['count'] or 0
+                else:
+                    daily_games = result[0] if result[0] is not None else 0
+            else:
+                daily_games = 0
+        
+        remaining_games = max(0, 5 - daily_games)
+        
+        if remaining_games <= 0:
+            return jsonify({
+                'access_granted': False,
+                'mode': 'competition',
+                'daily_games': daily_games,
+                'remaining_games': 0,
+                'limit_reached': True,
+                'message': 'Limite quotidienne atteinte (5 parties/jour). Revenez demain !'
+            })
+        
+        return jsonify({
+            'access_granted': True,
+            'mode': 'competition',
+            'daily_games': daily_games,
+            'remaining_games': remaining_games,
+            'limit_reached': False,
+            'message': f'Vous pouvez jouer {remaining_games} partie(s) aujourd\'hui'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur vérification accès: {e}")
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================

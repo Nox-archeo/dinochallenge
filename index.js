@@ -2744,9 +2744,271 @@
     };
 })();
 
+// =============================================================================
+// DINO CHALLENGE - API INTEGRATION
+// =============================================================================
+
+// Variables globales pour le système de score
+let gameState = {
+    telegram_id: null,
+    username: null,
+    first_name: null,
+    mode: 'demo',
+    dailyGames: 0,
+    remainingGames: 5,
+    hasAccess: false
+};
+
+// Vérifier l'accès au jeu avant de démarrer une partie
+async function checkGameAccess() {
+    if (gameState.mode === 'demo') {
+        return { access_granted: true, unlimited: true };
+    }
+    
+    if (!gameState.telegram_id) {
+        return { access_granted: false, error: 'telegram_id manquant' };
+    }
+    
+    try {
+        const response = await fetch(`/api/check-access?telegram_id=${gameState.telegram_id}&mode=${gameState.mode}`);
+        const data = await response.json();
+        
+        if (response.ok) {
+            return data;
+        } else {
+            console.error('❌ Erreur vérification accès:', data.error);
+            return { access_granted: false, error: data.error };
+        }
+    } catch (error) {
+        console.error('❌ Erreur réseau lors de la vérification d\'accès:', error);
+        return { access_granted: false, error: 'Erreur réseau' };
+    }
+}
+
+// Fonction pour récupérer les paramètres URL
+function getUrlParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return {
+        telegram_id: urlParams.get('telegram_id'),
+        username: urlParams.get('username'),
+        first_name: urlParams.get('first_name'),
+        mode: urlParams.get('mode') || 'demo'
+    };
+}
+
+// Fonction pour envoyer le score à l'API
+async function submitScore(score) {
+    if (!gameState.telegram_id || gameState.mode === 'demo') {
+        console.log('🎮 Mode démo - Score non envoyé:', score);
+        return { success: false, reason: 'Mode démo' };
+    }
+
+    try {
+        console.log('📤 Envoi du score:', {
+            telegram_id: gameState.telegram_id,
+            score: score,
+            username: gameState.username,
+            first_name: gameState.first_name
+        });
+
+        const response = await fetch('/api/score', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                telegram_id: parseInt(gameState.telegram_id),
+                score: score,
+                username: gameState.username,
+                first_name: gameState.first_name
+            })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('✅ Score enregistré avec succès:', data);
+            gameState.dailyGames = data.daily_games;
+            gameState.remainingGames = data.remaining_games;
+            
+            // Afficher le message de succès
+            showScoreMessage(`🎯 Score enregistré: ${score} points!<br>Parties restantes: ${data.remaining_games}/5`);
+        } else {
+            console.error('❌ Erreur envoi score:', data.error);
+            showScoreMessage(`❌ ${data.error}`);
+        }
+
+        return data;
+    } catch (error) {
+        console.error('❌ Erreur réseau:', error);
+        showScoreMessage('❌ Erreur de connexion');
+        return { success: false, error: error.message };
+    }
+}
+
+// Fonction pour afficher un message temporaire
+function showScoreMessage(message) {
+    // Créer ou récupérer l'élément de message
+    let messageEl = document.getElementById('score-message');
+    if (!messageEl) {
+        messageEl = document.createElement('div');
+        messageEl.id = 'score-message';
+        messageEl.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 10000;
+            transition: opacity 0.3s;
+        `;
+        document.body.appendChild(messageEl);
+    }
+
+    messageEl.innerHTML = message;
+    messageEl.style.opacity = '1';
+
+    // Masquer après 3 secondes
+    setTimeout(() => {
+        if (messageEl) {
+            messageEl.style.opacity = '0';
+            setTimeout(() => {
+                if (messageEl && messageEl.parentNode) {
+                    messageEl.parentNode.removeChild(messageEl);
+                }
+            }, 300);
+        }
+    }, 3000);
+}
+
+// Fonction pour vérifier l'accès utilisateur
+async function checkUserAccess() {
+    if (!gameState.telegram_id) {
+        return false;
+    }
+
+    try {
+        const response = await fetch(`/admin/check-access/${gameState.telegram_id}`);
+        const data = await response.json();
+        
+        gameState.hasAccess = data.has_access;
+        return data.has_access;
+    } catch (error) {
+        console.error('❌ Erreur vérification accès:', error);
+        return false;
+    }
+}
+
+// Initialisation au chargement de la page
+function initGameAPI() {
+    const params = getUrlParams();
+    
+    // Sauvegarder les paramètres
+    gameState.telegram_id = params.telegram_id;
+    gameState.username = params.username;
+    gameState.first_name = params.first_name;
+    gameState.mode = params.mode;
+
+    console.log('🎮 Dino Challenge initialisé:', gameState);
+
+    // Afficher le mode actuel
+    if (gameState.mode === 'competition' && gameState.telegram_id) {
+        showScoreMessage(`🏆 Mode Compétition activé!<br>Joueur: ${gameState.first_name || gameState.username || 'Anonyme'}`);
+        
+        // Vérifier l'accès
+        checkUserAccess().then(hasAccess => {
+            if (!hasAccess) {
+                showScoreMessage('⚠️ Accès premium requis pour le mode compétition');
+            }
+        });
+    } else {
+        showScoreMessage('🆓 Mode Démo - Scores non enregistrés');
+    }
+}
+
+// Hook dans la fonction gameOver pour envoyer automatiquement le score
+function hookGameOver() {
+    // Attendre que Runner soit disponible
+    if (typeof Runner !== 'undefined' && Runner.instance_) {
+        const originalGameOver = Runner.instance_.gameOver;
+        
+        Runner.instance_.gameOver = function() {
+            // Appeler la fonction gameOver originale
+            originalGameOver.call(this);
+            
+            // Envoyer le score automatiquement
+            const score = Math.ceil(this.distanceRan);
+            console.log('🎯 Game Over! Score:', score);
+            
+            // Envoyer le score si en mode compétition
+            if (gameState.mode === 'competition' && gameState.telegram_id) {
+                submitScore(score);
+            }
+        };
+        
+        console.log('✅ Hook gameOver installé');
+    } else {
+        // Réessayer dans 100ms
+        setTimeout(hookGameOver, 100);
+    }
+}
+
+// Hook dans la fonction restart pour vérifier l'accès avant de redémarrer
+function hookRestart() {
+    // Attendre que Runner soit disponible
+    if (typeof Runner !== 'undefined' && Runner.instance_) {
+        const originalRestart = Runner.instance_.restart;
+        
+        Runner.instance_.restart = async function() {
+            console.log('🔄 Tentative de redémarrage...');
+            
+            // Vérifier l'accès avant de permettre le restart
+            const accessCheck = await checkGameAccess();
+            
+            if (!accessCheck.access_granted) {
+                console.log('❌ Accès refusé:', accessCheck.error);
+                showScoreMessage(`❌ ${accessCheck.error || accessCheck.message || 'Accès refusé'}`);
+                return;
+            }
+            
+            if (accessCheck.limit_reached) {
+                console.log('❌ Limite quotidienne atteinte');
+                showScoreMessage(`❌ ${accessCheck.message || 'Limite quotidienne atteinte'}`);
+                return;
+            }
+            
+            // Informer l'utilisateur des parties restantes
+            if (accessCheck.remaining_games !== undefined && !accessCheck.unlimited) {
+                console.log(`✅ Redémarrage autorisé. Parties restantes: ${accessCheck.remaining_games}`);
+                showScoreMessage(`🎮 Partie ${accessCheck.daily_games + 1}/5 - ${accessCheck.remaining_games} restantes`);
+            }
+            
+            // Appeler la fonction restart originale
+            originalRestart.call(this);
+        };
+        
+        console.log('✅ Hook restart installé');
+    } else {
+        // Réessayer dans 100ms
+        setTimeout(hookRestart, 100);
+    }
+}
 
 function onDocumentLoad() {
+    // Initialiser le jeu original
     new Runner('.interstitial-wrapper');
+    
+    // Initialiser l'API
+    initGameAPI();
+    
+    // Installer les hooks après un délai
+    setTimeout(hookGameOver, 500);
+    setTimeout(hookRestart, 600);
 }
 
 document.addEventListener('DOMContentLoaded', onDocumentLoad);
