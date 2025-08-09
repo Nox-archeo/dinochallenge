@@ -548,7 +548,8 @@ class DatabaseManager:
                     WHERE telegram_id = ? AND month_year = ? AND status = 'completed'
                 """, (telegram_id, current_month))
                 
-                payment_count = cursor.fetchone()[0]
+                result = cursor.fetchone()
+                payment_count = result[0] if result else 0
                 if payment_count > 0:
                     return True
                 
@@ -561,7 +562,8 @@ class DatabaseManager:
                     WHERE telegram_id = ? AND status = 'active'
                 """, (telegram_id,))
                 
-                subscription_count = cursor.fetchone()[0]
+                result = cursor.fetchone()
+                subscription_count = result[0] if result else 0
                 return subscription_count > 0
                 
         except Exception as e:
@@ -631,8 +633,16 @@ class DatabaseManager:
                 """, (month_year,))
                 
                 result = cursor.fetchone()
-                total_amount = Decimal(str(result['total_amount'] or 0))
-                total_players = result['total_players'] or 0
+                if not result:
+                    total_amount = Decimal('0')
+                    total_players = 0
+                elif isinstance(result, dict):
+                    total_amount = Decimal(str(result['total_amount'] or 0))
+                    total_players = result['total_players'] or 0
+                else:
+                    # Si result est un tuple/liste
+                    total_amount = Decimal(str(result[0] or 0))
+                    total_players = result[1] or 0
                 
                 # Calculer les prix selon les pourcentages
                 first_prize = total_amount * Decimal('0.40')  # 40%
