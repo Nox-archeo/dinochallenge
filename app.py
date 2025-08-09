@@ -1190,6 +1190,35 @@ def paypal_webhook():
         logger.error(f"❌ Erreur webhook PayPal: {e}")
         return jsonify({'error': str(e)}), 500
 
+@flask_app.route('/debug-logs', methods=['GET'])
+def debug_logs():
+    """Endpoint temporaire pour récupérer les logs récents"""
+    try:
+        import subprocess
+        import os
+        
+        # Récupérer les 50 dernières lignes de logs
+        result = subprocess.run(['tail', '-50', '/var/log/app.log'], 
+                              capture_output=True, text=True, timeout=5)
+        
+        if result.returncode == 0:
+            logs = result.stdout
+        else:
+            # Fallback - créer des logs factices avec les vraies variables
+            logs = f"""
+DÉBOGAGE CONFIGURATION:
+PAYPAL_MODE: {PAYPAL_MODE}
+PAYPAL_BASE_URL: {PAYPAL_BASE_URL}
+PAYPAL_CLIENT_ID présent: {'Oui' if PAYPAL_CLIENT_ID else 'Non'}
+PAYPAL_SECRET_KEY présent: {'Oui' if PAYPAL_SECRET_KEY else 'Non'}
+Timestamp: {datetime.now().isoformat()}
+"""
+        
+        return f"<pre>{logs}</pre>", 200, {'Content-Type': 'text/html'}
+        
+    except Exception as e:
+        return f"<pre>Erreur récupération logs: {e}</pre>", 500, {'Content-Type': 'text/html'}
+
 def handle_payment_completed(webhook_data):
     """Traiter un paiement unique complété"""
     try:
