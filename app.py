@@ -141,6 +141,7 @@ class DatabaseManager:
                             telegram_id BIGINT UNIQUE NOT NULL,
                             username VARCHAR(255),
                             first_name VARCHAR(255),
+                            display_name VARCHAR(255),
                             email VARCHAR(255),
                             paypal_email VARCHAR(255),
                             registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -200,6 +201,7 @@ class DatabaseManager:
                             telegram_id INTEGER UNIQUE NOT NULL,
                             username TEXT,
                             first_name TEXT,
+                            display_name TEXT,
                             email TEXT,
                             paypal_email TEXT,
                             registration_date DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -257,6 +259,24 @@ class DatabaseManager:
                 
                 conn.commit()
                 logger.info("✅ Base de données initialisée avec succès")
+                
+                # Migration : ajouter display_name si elle n'existe pas
+                try:
+                    if self.is_postgres:
+                        cursor.execute("""
+                            ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(255)
+                        """)
+                    else:
+                        # Pour SQLite, vérifier si la colonne existe
+                        cursor.execute("PRAGMA table_info(users)")
+                        columns = [column[1] for column in cursor.fetchall()]
+                        if 'display_name' not in columns:
+                            cursor.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
+                    
+                    conn.commit()
+                    logger.info("✅ Migration display_name terminée")
+                except Exception as migration_error:
+                    logger.info(f"Migration display_name ignorée: {migration_error}")
                 
         except Exception as e:
             logger.error(f"❌ Erreur initialisation base de données: {e}")
@@ -344,34 +364,58 @@ class DatabaseManager:
                     cursor.execute("""
                         SELECT 
                             u.telegram_id,
-                            u.first_name,
+                            COALESCE(u.display_name, u.first_name, u.username, 'Anonyme') as display_name,
                             u.username,
                             MAX(s.score) as best_score,
                             COUNT(s.id) as total_games,
                             u.has_paid_current_month
                         FROM users u
                         JOIN scores s ON u.telegram_id = s.telegram_id
-                        WHERE s.month_year = %s
-                        GROUP BY u.telegram_id, u.first_name, u.username, u.has_paid_current_month
+                        WHERE s.month_year = %s 
+                          AND (u.has_paid_current_month = TRUE 
+                               OR EXISTS (
+                                   SELECT 1 FROM payments p 
+                                   WHERE p.telegram_id = u.telegram_id 
+                                     AND p.month_year = %s 
+                                     AND p.status = 'completed'
+                               )
+                               OR EXISTS (
+                                   SELECT 1 FROM subscriptions sub 
+                                   WHERE sub.telegram_id = u.telegram_id 
+                                     AND sub.status = 'active'
+                               ))
+                        GROUP BY u.telegram_id, u.display_name, u.first_name, u.username, u.has_paid_current_month
                         ORDER BY best_score DESC
                         LIMIT %s
-                    """, (month_year, limit))
+                    """, (month_year, month_year, limit))
                 else:
                     cursor.execute("""
                         SELECT 
                             u.telegram_id,
-                            u.first_name,
+                            COALESCE(u.display_name, u.first_name, u.username, 'Anonyme') as display_name,
                             u.username,
                             MAX(s.score) as best_score,
                             COUNT(s.id) as total_games,
                             u.has_paid_current_month
                         FROM users u
                         JOIN scores s ON u.telegram_id = s.telegram_id
-                        WHERE s.month_year = ?
-                        GROUP BY u.telegram_id, u.first_name, u.username, u.has_paid_current_month
+                        WHERE s.month_year = ? 
+                          AND (u.has_paid_current_month = 1 
+                               OR EXISTS (
+                                   SELECT 1 FROM payments p 
+                                   WHERE p.telegram_id = u.telegram_id 
+                                     AND p.month_year = ? 
+                                     AND p.status = 'completed'
+                               )
+                               OR EXISTS (
+                                   SELECT 1 FROM subscriptions sub 
+                                   WHERE sub.telegram_id = u.telegram_id 
+                                     AND sub.status = 'active'
+                               ))
+                        GROUP BY u.telegram_id, u.display_name, u.first_name, u.username, u.has_paid_current_month
                         ORDER BY best_score DESC
                         LIMIT ?
-                    """, (month_year, limit))
+                    """, (month_year, month_year, limit))
                 
                 results = cursor.fetchall()
                 return [dict(row) for row in results]
@@ -523,6 +567,48 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"❌ Erreur vérification accès: {e}")
             return False
+
+    def update_display_name(self, telegram_id: int, display_name: str) -> bool:
+        """Mettre à jour le nom d'affichage de l'utilisateur"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                if self.is_postgres:
+                    cursor.execute("""
+                        UPDATE users SET display_name = %s WHERE telegram_id = %s
+                    """, (display_name, telegram_id))
+                else:
+                    cursor.execute("""
+                        UPDATE users SET display_name = ? WHERE telegram_id = ?
+                    """, (display_name, telegram_id))
+                
+                conn.commit()
+                logger.info(f"✅ Nom d'affichage mis à jour: {telegram_id} = {display_name}")
+                return cursor.rowcount > 0
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur mise à jour nom d'affichage: {e}")
+            return False
+
+    def get_user_profile(self, telegram_id: int) -> Dict:
+        """Récupérer le profil complet d'un utilisateur"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT * FROM users WHERE telegram_id = %s
+                """ if self.is_postgres else """
+                    SELECT * FROM users WHERE telegram_id = ?
+                """, (telegram_id,))
+                
+                user = cursor.fetchone()
+                return dict(user) if user else {}
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur récupération profil: {e}")
+            return {}
 
 # Instance globale du gestionnaire de base de données
 db = DatabaseManager(DATABASE_URL)
@@ -1190,35 +1276,6 @@ def paypal_webhook():
         logger.error(f"❌ Erreur webhook PayPal: {e}")
         return jsonify({'error': str(e)}), 500
 
-@flask_app.route('/debug-logs', methods=['GET'])
-def debug_logs():
-    """Endpoint temporaire pour récupérer les logs récents"""
-    try:
-        import subprocess
-        import os
-        
-        # Récupérer les 50 dernières lignes de logs
-        result = subprocess.run(['tail', '-50', '/var/log/app.log'], 
-                              capture_output=True, text=True, timeout=5)
-        
-        if result.returncode == 0:
-            logs = result.stdout
-        else:
-            # Fallback - créer des logs factices avec les vraies variables
-            logs = f"""
-DÉBOGAGE CONFIGURATION:
-PAYPAL_MODE: {PAYPAL_MODE}
-PAYPAL_BASE_URL: {PAYPAL_BASE_URL}
-PAYPAL_CLIENT_ID présent: {'Oui' if PAYPAL_CLIENT_ID else 'Non'}
-PAYPAL_SECRET_KEY présent: {'Oui' if PAYPAL_SECRET_KEY else 'Non'}
-Timestamp: {datetime.now().isoformat()}
-"""
-        
-        return f"<pre>{logs}</pre>", 200, {'Content-Type': 'text/html'}
-        
-    except Exception as e:
-        return f"<pre>Erreur récupération logs: {e}</pre>", 500, {'Content-Type': 'text/html'}
-
 def handle_payment_completed(webhook_data):
     """Traiter un paiement unique complété"""
     try:
@@ -1480,6 +1537,37 @@ async def process_update_manually(bot, update):
             text = update.message.text
             user = update.message.from_user
             
+            # Vérifier si l'utilisateur est en train de configurer son nom
+            if user.id in user_states and user_states[user.id] == "waiting_for_name":
+                # Valider le nom
+                if text and len(text.strip()) >= 2 and len(text.strip()) <= 30:
+                    display_name = text.strip()
+                    if db.update_display_name(user.id, display_name):
+                        del user_states[user.id]  # Supprimer l'état
+                        await bot.send_message(
+                            chat_id=update.message.chat_id,
+                            text=f"✅ **Nom d'affichage mis à jour !**\n\n" +
+                                 f"🏷️ Votre nouveau nom: **{display_name}**\n\n" +
+                                 "Utilisez /profile pour voir votre profil complet.",
+                            parse_mode='Markdown'
+                        )
+                        # Afficher le menu principal
+                        await handle_start_command(bot, update.message)
+                    else:
+                        await bot.send_message(
+                            chat_id=update.message.chat_id,
+                            text="❌ Erreur lors de la mise à jour. Réessayez :"
+                        )
+                else:
+                    await bot.send_message(
+                        chat_id=update.message.chat_id,
+                        text="❌ **Nom invalide**\n\n" +
+                             "Le nom doit contenir entre 2 et 30 caractères.\n" +
+                             "📝 Envoyez-moi un nouveau nom :"
+                    )
+                return
+            
+            # Commandes normales
             if text == '/start':
                 await handle_start_command(bot, update.message)
             elif text == '/payment':
@@ -1492,6 +1580,12 @@ async def process_update_manually(bot, update):
                 await handle_cancel_subscription_command(bot, update.message)
             elif text == '/help':
                 await handle_help_command(bot, update.message)
+            else:
+                # Message non reconnu
+                await bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text="🤖 Commande non reconnue. Utilisez /start pour voir le menu."
+                )
                 
         elif update.callback_query:
             # Callbacks des boutons
@@ -1499,6 +1593,46 @@ async def process_update_manually(bot, update):
             
     except Exception as e:
         logger.error(f"❌ Erreur traitement update: {e}")
+
+# États pour la conversation de changement de nom
+user_states = {}
+
+async def handle_callback_query(bot, callback_query):
+    """Gérer les callbacks des boutons"""
+    await callback_query.answer()
+    
+    data = callback_query.data
+    user = callback_query.from_user
+    chat_id = callback_query.message.chat_id
+    
+    if data == "profile":
+        await handle_profile_command(bot, callback_query.message)
+    
+    elif data == "leaderboard":
+        await handle_leaderboard_command(bot, callback_query.message)
+    
+    elif data == "payment":
+        await handle_payment_command(bot, callback_query.message)
+    
+    elif data == "setup_profile":
+        user_states[user.id] = "waiting_for_name"
+        await bot.send_message(
+            chat_id=chat_id,
+            text="👋 **Configuration de votre profil**\n\n" +
+                 "🏷️ **Choisissez votre nom d'affichage**\n" +
+                 "Ce nom apparaîtra dans le classement.\n\n" +
+                 "📝 Envoyez-moi le nom que vous voulez utiliser :",
+            parse_mode='Markdown'
+        )
+    
+    elif data == "change_name":
+        user_states[user.id] = "waiting_for_name"
+        await bot.send_message(
+            chat_id=chat_id,
+            text="✏️ **Changer votre nom d'affichage**\n\n" +
+                 "📝 Envoyez-moi votre nouveau nom :",
+            parse_mode='Markdown'
+        )
 
 async def handle_start_command(bot, message):
     """Gérer la commande /start"""
@@ -1526,9 +1660,9 @@ async def handle_start_command(bot, message):
 • OU abonnement mensuel automatique
 
 🥇 **Prix mensuels distribués au top 3 :**
-• 1er place : 50% de la cagnotte
-• 2e place : 30% de la cagnotte  
-• 3e place : 20% de la cagnotte
+• 1er place : 70% de la cagnotte
+• 2e place : 20% de la cagnotte  
+• 3e place : 10% de la cagnotte
 
 📋 **Commandes principales :**
 /payment - 💰 Participer au concours
@@ -1538,17 +1672,41 @@ async def handle_start_command(bot, message):
 
 """
     
+    # Créer les boutons
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
     if has_access:
         text += f"✅ **Vous avez accès ce mois !**\n"
-        text += f"🔗 **Jouez maintenant :** {GAME_URL}"
+        keyboard = [
+            [
+                InlineKeyboardButton("🎮 JOUER (Mode Compétition)", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition"),
+                InlineKeyboardButton("🆓 Démo Gratuite", url=f"{GAME_URL}?mode=demo")
+            ],
+            [
+                InlineKeyboardButton("👤 Mon Profil", callback_data="profile"),
+                InlineKeyboardButton("🏆 Classement", callback_data="leaderboard")
+            ]
+        ]
     else:
-        text += f"⚠️ **Payez pour participer :** /payment\n"
-        text += f"🎮 **Démo gratuite :** {GAME_URL}"
+        text += f"⚠️ **Configurez votre profil puis payez pour participer**\n"
+        keyboard = [
+            [
+                InlineKeyboardButton("👤 Configurer mon Profil", callback_data="setup_profile"),
+                InlineKeyboardButton("💰 Participer (11 CHF)", callback_data="payment")
+            ],
+            [
+                InlineKeyboardButton("� Démo Gratuite", url=f"{GAME_URL}?mode=demo"),
+                InlineKeyboardButton("🏆 Classement", callback_data="leaderboard")
+            ]
+        ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=reply_markup
     )
 
 async def handle_payment_command(bot, message):
@@ -1642,11 +1800,15 @@ async def handle_leaderboard_command(bot, message):
 async def handle_profile_command(bot, message):
     """Gérer la commande /profile"""
     user = message.from_user
-    db_user = db.create_or_get_user(user.id, user.username, user.first_name)
+    db_user = db.get_user_profile(user.id)
+    
+    if not db_user:
+        db_user = db.create_or_get_user(user.id, user.username, user.first_name)
     
     # Récupérer les stats de l'utilisateur
     current_month = datetime.now().strftime('%Y-%m')
     user_scores = []
+    has_access = db.check_user_access(user.id)
     
     try:
         with db.get_connection() as conn:
@@ -1668,10 +1830,18 @@ async def handle_profile_command(bot, message):
     except Exception as e:
         logger.error(f"❌ Erreur récupération profil: {e}")
     
-    text = f"👤 **PROFIL - {user.first_name}**\n\n"
+    display_name = db_user.get('display_name') or db_user.get('first_name') or user.first_name or 'Anonyme'
+    
+    text = f"👤 **PROFIL - {display_name}**\n\n"
+    text += f"🏷️ **Nom d'affichage:** {display_name}\n"
     text += f"🆔 **ID Telegram:** {user.id}\n"
-    text += f"📧 **Email:** {db_user.get('email', 'Non configuré')}\n"
-    text += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')}\n\n"
+    text += f"� **Nom Telegram:** {user.first_name}\n"
+    text += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')[:10] if db_user.get('registration_date') else 'Inconnue'}\n\n"
+    
+    if has_access:
+        text += f"✅ **Statut:** Accès actif ce mois\n\n"
+    else:
+        text += f"❌ **Statut:** Pas d'accès ce mois\n\n"
     
     if user_scores:
         text += f"🏆 **TOP 5 DE VOS SCORES CE MOIS:**\n"
@@ -1681,12 +1851,25 @@ async def handle_profile_command(bot, message):
         text += f"\n📊 **Total parties:** {len(user_scores)}\n"
     else:
         text += "🎮 **Aucun score ce mois-ci**\n"
-        text += f"Jouez ici : {GAME_URL}\n"
+    
+    # Boutons
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    keyboard = [
+        [InlineKeyboardButton("✏️ Changer mon nom", callback_data="change_name")],
+        [InlineKeyboardButton("🎮 Jouer", url=f"{GAME_URL}?telegram_id={user.id}")]
+    ]
+    
+    if has_access:
+        keyboard[1] = [InlineKeyboardButton("🎮 Jouer (Compétition)", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition")]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=reply_markup
     )
 
 async def handle_cancel_subscription_command(bot, message):
@@ -1723,9 +1906,9 @@ async def handle_help_command(bot, message):
 
 🏆 **Concours mensuel :**
 Prix distribués au top 3 de chaque mois :
-• 🥇 1er : 50% de la cagnotte
-• 🥈 2e : 30% de la cagnotte  
-• 🥉 3e : 20% de la cagnotte
+• 🥇 1er : 70% de la cagnotte
+• 🥈 2e : 20% de la cagnotte  
+• 🥉 3e : 10% de la cagnotte
 
 📋 **Commandes :**
 /start - Menu principal
