@@ -1660,9 +1660,10 @@ async def handle_start_command(bot, message):
 • OU abonnement mensuel automatique
 
 🥇 **Prix mensuels distribués au top 3 :**
-• 1er place : 70% de la cagnotte
-• 2e place : 20% de la cagnotte  
-• 3e place : 10% de la cagnotte
+• 1er place : 40% de la cagnotte
+• 2e place : 15% de la cagnotte  
+• 3e place : 5% de la cagnotte
+(40% restants pour les frais d'organisation)
 
 📋 **Commandes principales :**
 /payment - 💰 Participer au concours
@@ -1906,9 +1907,10 @@ async def handle_help_command(bot, message):
 
 🏆 **Concours mensuel :**
 Prix distribués au top 3 de chaque mois :
-• 🥇 1er : 70% de la cagnotte
-• 🥈 2e : 20% de la cagnotte  
-• 🥉 3e : 10% de la cagnotte
+• 🥇 1er : 40% de la cagnotte
+• 🥈 2e : 15% de la cagnotte  
+• 🥉 3e : 5% de la cagnotte
+(40% restants pour les frais d'organisation)
 
 📋 **Commandes :**
 /start - Menu principal
