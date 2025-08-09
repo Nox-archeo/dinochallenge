@@ -613,8 +613,16 @@ class DatabaseManager:
                 """, (telegram_id, current_month))
                 
                 result = cursor.fetchone()
-                payment_count = result[0] if result else 0
+                payment_count = 0
+                if result:
+                    try:
+                        payment_count = int(result[0]) if result[0] is not None else 0
+                    except (IndexError, TypeError, ValueError) as conv_error:
+                        logger.warning(f"⚠️ Erreur conversion payment_count: {conv_error}, result: {result}")
+                        payment_count = 0
+                
                 if payment_count > 0:
+                    logger.info(f"✅ Accès accordé via paiement: {telegram_id} ({payment_count} paiements)")
                     return True
                 
                 # Vérifier les abonnements actifs
@@ -627,11 +635,28 @@ class DatabaseManager:
                 """, (telegram_id,))
                 
                 result = cursor.fetchone()
-                subscription_count = result[0] if result else 0
-                return subscription_count > 0
+                subscription_count = 0
+                if result:
+                    try:
+                        subscription_count = int(result[0]) if result[0] is not None else 0
+                    except (IndexError, TypeError, ValueError) as conv_error:
+                        logger.warning(f"⚠️ Erreur conversion subscription_count: {conv_error}, result: {result}")
+                        subscription_count = 0
+                
+                access_granted = subscription_count > 0
+                if access_granted:
+                    logger.info(f"✅ Accès accordé via abonnement: {telegram_id} ({subscription_count} abonnements)")
+                else:
+                    logger.info(f"❌ Aucun accès: {telegram_id} (paiements: {payment_count}, abonnements: {subscription_count})")
+                
+                return access_granted
                 
         except Exception as e:
             logger.error(f"❌ Erreur vérification accès: {e}")
+            logger.error(f"❌ Type d'erreur: {type(e).__name__}")
+            logger.error(f"❌ Telegram ID: {telegram_id}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return False
 
     def update_display_name(self, telegram_id: int, display_name: str) -> bool:
