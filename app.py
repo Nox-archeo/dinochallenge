@@ -610,6 +610,108 @@ class DatabaseManager:
             logger.error(f"❌ Erreur récupération profil: {e}")
             return {}
 
+    def calculate_monthly_prizes(self, month_year: str = None) -> Dict:
+        """Calculer les prix du mois basés sur les paiements"""
+        if not month_year:
+            month_year = datetime.now().strftime('%Y-%m')
+        
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Calculer le total des paiements pour le mois
+                cursor.execute("""
+                    SELECT SUM(amount) as total_amount, COUNT(*) as total_players
+                    FROM payments 
+                    WHERE month_year = %s AND status = 'completed'
+                """ if self.is_postgres else """
+                    SELECT SUM(amount) as total_amount, COUNT(*) as total_players
+                    FROM payments 
+                    WHERE month_year = ? AND status = 'completed'
+                """, (month_year,))
+                
+                result = cursor.fetchone()
+                total_amount = Decimal(str(result['total_amount'] or 0))
+                total_players = result['total_players'] or 0
+                
+                # Calculer les prix selon les pourcentages
+                first_prize = total_amount * Decimal('0.40')  # 40%
+                second_prize = total_amount * Decimal('0.15')  # 15%
+                third_prize = total_amount * Decimal('0.05')   # 5%
+                organization_fees = total_amount * Decimal('0.40')  # 40%
+                
+                return {
+                    'month_year': month_year,
+                    'total_amount': float(total_amount),
+                    'total_players': total_players,
+                    'prizes': {
+                        'first': float(first_prize),
+                        'second': float(second_prize),
+                        'third': float(third_prize),
+                        'organization_fees': float(organization_fees)
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur calcul prix mensuels: {e}")
+            return {
+                'month_year': month_year,
+                'total_amount': 0,
+                'total_players': 0,
+                'prizes': {'first': 0, 'second': 0, 'third': 0, 'organization_fees': 0}
+            }
+
+    def get_user_position_and_prize(self, telegram_id: int, month_year: str = None) -> Dict:
+        """Obtenir la position actuelle d'un utilisateur et son gain potentiel"""
+        if not month_year:
+            month_year = datetime.now().strftime('%Y-%m')
+        
+        try:
+            # Obtenir le classement complet
+            leaderboard = self.get_leaderboard(month_year, 100)  # Top 100 pour être sûr
+            
+            # Calculer les prix du mois
+            prize_info = self.calculate_monthly_prizes(month_year)
+            
+            # Trouver la position de l'utilisateur
+            user_position = None
+            user_score = 0
+            user_prize = 0
+            
+            for i, player in enumerate(leaderboard):
+                if player['telegram_id'] == telegram_id:
+                    user_position = i + 1
+                    user_score = player['best_score']
+                    
+                    # Calculer le gain selon la position
+                    if user_position == 1:
+                        user_prize = prize_info['prizes']['first']
+                    elif user_position == 2:
+                        user_prize = prize_info['prizes']['second']
+                    elif user_position == 3:
+                        user_prize = prize_info['prizes']['third']
+                    else:
+                        user_prize = 0
+                    break
+            
+            return {
+                'position': user_position,
+                'score': user_score,
+                'prize': user_prize,
+                'total_players': len(leaderboard),
+                'prize_info': prize_info
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur position et prix utilisateur: {e}")
+            return {
+                'position': None,
+                'score': 0,
+                'prize': 0,
+                'total_players': 0,
+                'prize_info': self.calculate_monthly_prizes(month_year)
+            }
+
 # Instance globale du gestionnaire de base de données
 db = DatabaseManager(DATABASE_URL)
 
@@ -1437,7 +1539,7 @@ def get_telegram_id_from_subscription(subscription_id):
 # =============================================================================
 
 async def notify_payment_success(telegram_id: int, amount: Decimal, payment_type: str):
-    """Notifier le succès d'un paiement"""
+    """Notifier le succès d'un paiement et recalculer les gains"""
     try:
         if payment_type == 'abonnement':
             message = f"✅ **Abonnement Activé !**\n\n"
@@ -1454,6 +1556,17 @@ async def notify_payment_success(telegram_id: int, amount: Decimal, payment_type
             message += f"🎮 **Accès activé pour ce mois !**\n"
             message += f"🔗 Jouez ici : {GAME_URL}\n\n"
             message += f"💡 Pour un accès permanent, choisissez l'abonnement mensuel avec /payment"
+        
+        # Calculer et afficher les nouveaux gains
+        current_month = datetime.now().strftime('%Y-%m')
+        prize_info = db.calculate_monthly_prizes(current_month)
+        
+        message += f"\n\n🏆 **CAGNOTTE MISE À JOUR !**\n"
+        message += f"💰 **Total : {prize_info['total_amount']:.2f} CHF** ({prize_info['total_players']} joueurs)\n"
+        message += f"🥇 1er : {prize_info['prizes']['first']:.2f} CHF\n"
+        message += f"🥈 2e : {prize_info['prizes']['second']:.2f} CHF\n"
+        message += f"🥉 3e : {prize_info['prizes']['third']:.2f} CHF\n\n"
+        message += f"🎯 **Jouez maintenant pour remporter ces prix !**"
         
         if telegram_app:
             await telegram_app.send_message(
@@ -1476,6 +1589,68 @@ async def notify_subscription_renewal(telegram_id: int, amount: Decimal):
         message += f"🔗 Jouez ici : {GAME_URL}"
         
         if telegram_app:
+            await telegram_app.send_message(
+                chat_id=telegram_id,
+                text=message,
+                parse_mode='Markdown'
+            )
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur notification renouvellement: {e}")
+
+async def notify_new_score(telegram_id: int, score: int):
+    """Notifier un nouveau score avec calcul automatique des gains"""
+    try:
+        # Obtenir la position et les gains de l'utilisateur
+        position_info = db.get_user_position_and_prize(telegram_id)
+        prize_info = position_info['prize_info']
+        
+        message = f"🎮 **Nouveau Score Enregistré !**\n\n"
+        message += f"🎯 **Score :** {score:,} points\n"
+        
+        if position_info['position']:
+            message += f"🏆 **Position :** {position_info['position']}/{position_info['total_players']}\n\n"
+            
+            # Afficher les gains potentiels
+            if position_info['prize'] > 0:
+                if position_info['position'] == 1:
+                    message += f"🥇 **FÉLICITATIONS ! Vous êtes 1er !**\n"
+                    message += f"💰 **Gain actuel :** {position_info['prize']:.2f} CHF\n"
+                elif position_info['position'] == 2:
+                    message += f"🥈 **Excellent ! Vous êtes 2e !**\n"
+                    message += f"💰 **Gain actuel :** {position_info['prize']:.2f} CHF\n"
+                elif position_info['position'] == 3:
+                    message += f"🥉 **Bravo ! Vous êtes 3e !**\n"
+                    message += f"💰 **Gain actuel :** {position_info['prize']:.2f} CHF\n"
+                
+                message += f"\n📊 **Cagnotte actuelle :**\n"
+                message += f"• 🥇 1er : {prize_info['prizes']['first']:.2f} CHF\n"
+                message += f"• 🥈 2e : {prize_info['prizes']['second']:.2f} CHF\n"
+                message += f"• 🥉 3e : {prize_info['prizes']['third']:.2f} CHF\n"
+                message += f"• 👥 {prize_info['total_players']} joueurs ({prize_info['total_amount']:.2f} CHF collectés)\n"
+            else:
+                message += f"💡 **Top 3 pour gagner !**\n"
+                message += f"🎯 Battez le score du 3e pour gagner {prize_info['prizes']['third']:.2f} CHF !\n\n"
+                message += f"📊 **Cagnotte actuelle :**\n"
+                message += f"• 🥇 1er : {prize_info['prizes']['first']:.2f} CHF\n"
+                message += f"• 🥈 2e : {prize_info['prizes']['second']:.2f} CHF\n"
+                message += f"• 🥉 3e : {prize_info['prizes']['third']:.2f} CHF\n"
+        else:
+            message += f"❌ **Non classé** (paiement requis)\n"
+            message += f"💡 Payez votre participation avec /payment pour être classé !\n"
+        
+        message += f"\n🎮 Continuez à jouer : {GAME_URL}"
+        message += f"\n🏆 Classement : /leaderboard"
+        
+        if telegram_app:
+            await telegram_app.send_message(
+                chat_id=telegram_id,
+                text=message,
+                parse_mode='Markdown'
+            )
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur notification nouveau score: {e}")
             await telegram_app.send_message(
                 chat_id=telegram_id,
                 text=message,
@@ -1758,7 +1933,7 @@ async def handle_payment_command(bot, message):
     )
 
 async def handle_leaderboard_command(bot, message):
-    """Gérer la commande /leaderboard"""
+    """Gérer la commande /leaderboard avec calcul des gains en temps réel"""
     try:
         current_month = datetime.now().strftime('%Y-%m')
         leaderboard = db.get_leaderboard(current_month, 10)
@@ -1770,20 +1945,43 @@ async def handle_leaderboard_command(bot, message):
             )
             return
         
+        # Calculer les prix du mois
+        prize_info = db.calculate_monthly_prizes(current_month)
+        
         text = f"🏆 **CLASSEMENT - {datetime.now().strftime('%B %Y')}**\n\n"
+        text += f"💰 **Cagnotte : {prize_info['total_amount']:.2f} CHF** ({prize_info['total_players']} joueurs)\n"
+        text += f"🥇 1er : {prize_info['prizes']['first']:.2f} CHF\n"
+        text += f"🥈 2e : {prize_info['prizes']['second']:.2f} CHF\n"
+        text += f"🥉 3e : {prize_info['prizes']['third']:.2f} CHF\n\n"
         
         medals = ['🥇', '🥈', '🥉'] + ['🏅'] * 7
         
         for i, player in enumerate(leaderboard):
             medal = medals[i] if i < len(medals) else '🏅'
-            name = player['first_name'] or player['username'] or 'Joueur Anonyme'
+            display_name = player['display_name']
             score = player['best_score']
             games = player['total_games']
             
-            text += f"{medal} **#{i+1} - {name}**\n"
-            text += f"   📊 {score:,} pts ({games} parties)\n\n"
+            # Calculer le gain pour cette position
+            if i == 0:
+                prize = prize_info['prizes']['first']
+            elif i == 1:
+                prize = prize_info['prizes']['second']
+            elif i == 2:
+                prize = prize_info['prizes']['third']
+            else:
+                prize = 0
+            
+            text += f"{medal} **#{i+1} - {display_name}**\n"
+            text += f"   📊 {score:,} pts ({games} parties)"
+            
+            if prize > 0:
+                text += f" 💰 {prize:.2f} CHF"
+            
+            text += f"\n\n"
         
-        text += f"🎮 Jouez ici : {GAME_URL}"
+        text += f"🎮 Jouez ici : {GAME_URL}\n"
+        text += f"💡 Les gains sont automatiquement recalculés à chaque nouveau paiement !"
         
         await bot.send_message(
             chat_id=message.chat_id,
@@ -1979,6 +2177,124 @@ async def handle_callback_query(bot, callback_query):
                 message_id=callback_query.message.message_id,
                 text=text,
                 parse_mode='Markdown'
+            )
+        
+        elif data == "leaderboard":
+            # Afficher le classement avec gains en temps réel
+            current_month = datetime.now().strftime('%Y-%m')
+            leaderboard = db.get_leaderboard(current_month, 10)
+            
+            if not leaderboard:
+                text = "🏆 Aucun score enregistré ce mois-ci."
+            else:
+                # Calculer les prix du mois
+                prize_info = db.calculate_monthly_prizes(current_month)
+                
+                text = f"🏆 **CLASSEMENT - {datetime.now().strftime('%B %Y')}**\n\n"
+                text += f"💰 **Cagnotte : {prize_info['total_amount']:.2f} CHF** ({prize_info['total_players']} joueurs)\n"
+                text += f"🥇 1er : {prize_info['prizes']['first']:.2f} CHF\n"
+                text += f"🥈 2e : {prize_info['prizes']['second']:.2f} CHF\n"
+                text += f"🥉 3e : {prize_info['prizes']['third']:.2f} CHF\n\n"
+                
+                medals = ['🥇', '🥈', '🥉'] + ['🏅'] * 7
+                
+                for i, player in enumerate(leaderboard):
+                    medal = medals[i] if i < len(medals) else '🏅'
+                    display_name = player['display_name']
+                    score = player['best_score']
+                    games = player['total_games']
+                    
+                    # Calculer le gain pour cette position
+                    if i == 0:
+                        prize = prize_info['prizes']['first']
+                    elif i == 1:
+                        prize = prize_info['prizes']['second']
+                    elif i == 2:
+                        prize = prize_info['prizes']['third']
+                    else:
+                        prize = 0
+                    
+                    text += f"{medal} **#{i+1} - {display_name}**\n"
+                    text += f"   📊 {score:,} pts ({games} parties)"
+                    
+                    if prize > 0:
+                        text += f" 💰 {prize:.2f} CHF"
+                    
+                    text += f"\n\n"
+                
+                text += f"🎮 Jouez ici : {GAME_URL}\n"
+                text += f"💡 Les gains sont automatiquement recalculés à chaque nouveau paiement !"
+            
+            await bot.edit_message_text(
+                chat_id=callback_query.message.chat_id,
+                message_id=callback_query.message.message_id,
+                text=text,
+                parse_mode='Markdown'
+            )
+        
+        elif data == "profile":
+            # Afficher le profil avec position et gains
+            user = callback_query.from_user
+            db_user = db.get_user_profile(user.id)
+            has_access = db.check_user_access(user.id)
+            
+            # Obtenir la position et les gains de l'utilisateur
+            position_info = db.get_user_position_and_prize(user.id)
+            
+            display_name = db_user.get('display_name') or db_user.get('first_name') or user.first_name or 'Anonyme'
+            
+            text = f"👤 **PROFIL - {display_name}**\n\n"
+            text += f"🏷️ **Nom d'affichage:** {display_name}\n"
+            text += f"🆔 **ID Telegram:** {user.id}\n"
+            text += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')[:10] if db_user.get('registration_date') else 'Inconnue'}\n\n"
+            
+            if has_access:
+                text += f"✅ **Statut:** Accès actif ce mois\n\n"
+                
+                if position_info['position']:
+                    text += f"🏆 **CLASSEMENT ACTUEL:**\n"
+                    text += f"📍 Position : {position_info['position']}/{position_info['total_players']}\n"
+                    text += f"🎯 Meilleur score : {position_info['score']:,} pts\n"
+                    
+                    if position_info['prize'] > 0:
+                        text += f"💰 **Gain actuel : {position_info['prize']:.2f} CHF**\n\n"
+                        
+                        if position_info['position'] == 1:
+                            text += f"🥇 **Félicitations ! Vous êtes 1er !**\n"
+                        elif position_info['position'] == 2:
+                            text += f"🥈 **Excellent ! Vous êtes 2e !**\n"
+                        elif position_info['position'] == 3:
+                            text += f"🥉 **Bravo ! Vous êtes 3e !**\n"
+                    else:
+                        text += f"💡 **Pas encore dans le top 3**\n"
+                        text += f"🎯 Battez le 3e pour gagner {position_info['prize_info']['prizes']['third']:.2f} CHF !\n\n"
+                    
+                    # Afficher la cagnotte actuelle
+                    text += f"📊 **Cagnotte actuelle :**\n"
+                    text += f"• 🥇 1er : {position_info['prize_info']['prizes']['first']:.2f} CHF\n"
+                    text += f"• 🥈 2e : {position_info['prize_info']['prizes']['second']:.2f} CHF\n"
+                    text += f"• 🥉 3e : {position_info['prize_info']['prizes']['third']:.2f} CHF\n"
+                else:
+                    text += f"🎮 **Jouez pour être classé !**\n"
+            else:
+                text += f"❌ **Statut:** Pas d'accès ce mois\n\n"
+            
+            # Boutons
+            keyboard = [[InlineKeyboardButton("✏️ Changer mon nom", callback_data="change_name")]]
+            
+            if has_access:
+                keyboard.append([InlineKeyboardButton("🎮 Jouer", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition")])
+            else:
+                keyboard.append([InlineKeyboardButton("💰 Participer", callback_data="payment")])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await bot.edit_message_text(
+                chat_id=callback_query.message.chat_id,
+                message_id=callback_query.message.message_id,
+                text=text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
             
     except Exception as e:
