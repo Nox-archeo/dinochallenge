@@ -2413,13 +2413,20 @@ async def run_telegram_bot():
             try:
                 logger.info("🧹 Nettoyage RADICAL des mises à jour...")
                 
-                # Méthode 1: Utiliser un offset très élevé pour ignorer toutes les anciennes mises à jour
+                # Étape 1: Supprimer les webhooks (au cas où)
+                try:
+                    await bot.delete_webhook(drop_pending_updates=True)
+                    logger.info("✅ Webhooks supprimés")
+                except Exception as webhook_error:
+                    logger.warning(f"⚠️ Erreur suppression webhook: {webhook_error}")
+                
+                # Étape 2: Utiliser un offset très élevé pour ignorer toutes les anciennes mises à jour
                 await bot.get_updates(offset=-1, timeout=1, limit=1)
                 logger.info("✅ Toutes les anciennes mises à jour ignorées")
                 
-                # Méthode 2: Attendre que toutes les autres connexions se ferment
+                # Étape 3: Attendre que toutes les autres connexions se ferment
                 logger.info("⏳ Attente de fermeture des autres connexions...")
-                await asyncio.sleep(10)  # Attendre plus longtemps
+                await asyncio.sleep(15)  # Attendre plus longtemps pour être sûr
                 
             except Exception as cleanup_error:
                 logger.warning(f"⚠️ Erreur nettoyage (peut être normal): {cleanup_error}")
