@@ -2408,6 +2408,11 @@ async def run_telegram_bot():
             from telegram import BotCommand
             commands = [
                 BotCommand("start", "🏠 Menu principal"),
+                BotCommand("payment", "💰 Participer au concours"),
+                BotCommand("leaderboard", "🏆 Classement mensuel"),
+                BotCommand("profile", "👤 Mon profil"),
+                BotCommand("score", "🎯 Soumettre un score"),
+                BotCommand("cancel_subscription", "❌ Annuler l'abonnement"),
                 BotCommand("help", "❓ Aide et règles"),
             ]
             
