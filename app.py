@@ -2474,7 +2474,7 @@ async def handle_play_game(bot, message):
 """
 
         keyboard = [
-            [InlineKeyboardButton("🏆 JOUER EN MODE CLASSÉ", callback_data="payment")],
+            [InlineKeyboardButton("🏆 JOUER EN MODE CLASSÉ", url=f"{GAME_URL}?telegram_id={message.from_user.id}&mode=competition")],
             [InlineKeyboardButton("🆓 Mode démo (gratuit)", url=f"{GAME_URL}?mode=demo")],
             [
                 InlineKeyboardButton("🏆 Voir le classement", callback_data="leaderboard"),
