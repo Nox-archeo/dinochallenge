@@ -2222,7 +2222,11 @@ async def handle_play_game(bot, message):
 
 ⚠️ **Accès requis pour le mode compétition**
 
-💰 **Participation mensuelle : 11 CHF**
+💰 **Deux options de participation :**
+• 💳 **Paiement unique** : 11 CHF pour le mois en cours
+• 🔄 **Abonnement mensuel** : 11 CHF/mois automatique
+
+✅ **Avantages :**
 • Scores comptabilisés dans le classement
 • Éligibilité aux prix mensuels
 • Accès illimité tout le mois
@@ -2232,7 +2236,7 @@ async def handle_play_game(bot, message):
 """
 
         keyboard = [
-            [InlineKeyboardButton("💳 PARTICIPER (11 CHF)", callback_data="payment")],
+            [InlineKeyboardButton("� CHOISIR MON OPTION DE PAIEMENT", callback_data="payment")],
             [InlineKeyboardButton("🆓 Mode démo (gratuit)", url=f"{GAME_URL}?mode=demo")],
             [
                 InlineKeyboardButton("🏆 Voir le classement", callback_data="leaderboard"),
