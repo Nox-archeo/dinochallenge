@@ -16,15 +16,9 @@ import sqlite3
 import traceback
 import fcntl  # Pour le verrouillage de fichier
 import tempfile
-import json
-import threading
-import time
-import base64
-import hmac
-import hashlib
-import requests
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict
+import json
 
 # Imports pour le bot Telegram
 from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
@@ -33,9 +27,15 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 # Imports pour l'API web
 from flask import Flask, request, jsonify, render_template_string, redirect
 from flask_cors import CORS
+import threading
+import time
+import base64
 
 # Imports pour PayPal
 import paypalrestsdk
+import hmac
+import hashlib
+import requests
 from decimal import Decimal
 
 # Imports pour la base de données
@@ -2040,69 +2040,8 @@ async def handle_callback_query(bot, callback_query):
             )
 
         elif data == "profile":
-            # Afficher le profil avec position et gains
-            db_user = db.get_user_profile(user.id)
-            has_access = db.check_user_access(user.id)
-            
-            # Obtenir la position et les gains de l'utilisateur
-            position_info = db.get_user_position_and_prize(user.id)
-            
-            display_name = db_user.get('display_name') or db_user.get('first_name') or user.first_name or 'Anonyme'
-            
-            text = f"👤 **PROFIL - {display_name}**\n\n"
-            text += f"🏷️ **Nom d'affichage:** {display_name}\n"
-            text += f"🆔 **ID Telegram:** {user.id}\n"
-            text += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')[:10] if db_user.get('registration_date') else 'Inconnue'}\n\n"
-            
-            if has_access:
-                text += f"✅ **Statut:** Accès actif ce mois\n\n"
-                
-                if position_info['position']:
-                    text += f"🏆 **CLASSEMENT ACTUEL:**\n"
-                    text += f"📍 Position : {position_info['position']}/{position_info['total_players']}\n"
-                    text += f"🎯 Meilleur score : {position_info['score']:,} pts\n"
-                    
-                    if position_info['prize'] > 0:
-                        text += f"💰 **Gain actuel : {position_info['prize']:.2f} CHF**\n\n"
-                        
-                        if position_info['position'] == 1:
-                            text += f"🥇 **Félicitations ! Vous êtes 1er !**\n"
-                        elif position_info['position'] == 2:
-                            text += f"🥈 **Excellent ! Vous êtes 2e !**\n"
-                        elif position_info['position'] == 3:
-                            text += f"🥉 **Bravo ! Vous êtes 3e !**\n"
-                    else:
-                        text += f"💡 **Pas encore dans le top 3**\n"
-                        text += f"🎯 Battez le 3e pour gagner {position_info['prize_info']['prizes']['third']:.2f} CHF !\n\n"
-                    
-                    # Afficher la cagnotte actuelle
-                    text += f"📊 **Cagnotte actuelle :**\n"
-                    text += f"• 🥇 1er : {position_info['prize_info']['prizes']['first']:.2f} CHF\n"
-                    text += f"• 🥈 2e : {position_info['prize_info']['prizes']['second']:.2f} CHF\n"
-                    text += f"• 🥉 3e : {position_info['prize_info']['prizes']['third']:.2f} CHF\n"
-                else:
-                    text += f"🎮 **Jouez pour être classé !**\n"
-            else:
-                text += f"❌ **Statut:** Pas d'accès ce mois\n\n"
-            
-            # Boutons
-            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-            keyboard = [[InlineKeyboardButton("✏️ Changer mon nom", callback_data="change_name")]]
-            
-            if has_access:
-                keyboard.append([InlineKeyboardButton("🎮 Jouer", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition")])
-            else:
-                keyboard.append([InlineKeyboardButton("💰 Participer", callback_data="payment")])
-            
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=callback_query.message.message_id,
-                text=text,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
+            # Rediriger vers la fonction handle_profile_command
+            await handle_profile_command(bot, callback_query.message)
 
         elif data == "leaderboard":
             # Afficher le classement avec gains en temps réel
@@ -2441,13 +2380,25 @@ async def handle_profile_command(bot, message):
     position_info = db.get_user_position_and_prize(user.id)
     
     display_name = db_user.get('display_name') or user.first_name or 'Anonyme'
-    paypal_email = db_user.get('paypal_email', 'Non renseigné')
+    paypal_email = db_user.get('paypal_email') or 'Non renseigné'
+    
+    # Gérer la date d'inscription (peut être datetime ou string)
+    registration_date = db_user.get('registration_date')
+    if registration_date:
+        if hasattr(registration_date, 'strftime'):
+            # Si c'est un objet datetime
+            registration_str = registration_date.strftime('%Y-%m-%d')
+        else:
+            # Si c'est déjà une string
+            registration_str = str(registration_date)[:10]
+    else:
+        registration_str = 'Inconnue'
     
     text = f"👤 **PROFIL - {display_name}**\n\n"
     text += f"🏷️ **Nom d'affichage:** {display_name}\n"
     text += f"📧 **Email PayPal:** {paypal_email}\n"
     text += f"🆔 **ID Telegram:** {user.id}\n"
-    text += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')[:10] if db_user.get('registration_date') else 'Inconnue'}\n\n"
+    text += f"📅 **Inscription:** {registration_str}\n\n"
     
     if has_access:
         text += f"✅ **Statut:** Accès actif ce mois\n\n"
