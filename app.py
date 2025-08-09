@@ -1651,14 +1651,6 @@ async def notify_new_score(telegram_id: int, score: int):
         
     except Exception as e:
         logger.error(f"❌ Erreur notification nouveau score: {e}")
-            await telegram_app.send_message(
-                chat_id=telegram_id,
-                text=message,
-                parse_mode='Markdown'
-            )
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur notification renouvellement: {e}")
 
 async def notify_new_score(telegram_id: int, score: int):
     """Notifier l'utilisateur de son nouveau score"""
