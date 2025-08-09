@@ -1757,6 +1757,17 @@ async def process_update_manually(bot, update):
                 await handle_cancel_subscription_command(bot, update.message)
             elif text == '/help':
                 await handle_help_command(bot, update.message)
+            elif text == '/score':
+                # Commande /score sans paramètre - expliquer l'usage
+                await bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text="🎯 **Soumettre un score**\n\n" +
+                         "Pour soumettre votre score, utilisez :\n" +
+                         "`/score [votre_score]`\n\n" +
+                         "**Exemple :** `/score 1250`\n\n" +
+                         "💡 Vous devez avoir payé votre participation (11 CHF) pour soumettre des scores.",
+                    parse_mode='Markdown'
+                )
             elif text.startswith('/score '):
                 await handle_score_command(bot, update.message)
             else:
