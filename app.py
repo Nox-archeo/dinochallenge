@@ -16,9 +16,15 @@ import sqlite3
 import traceback
 import fcntl  # Pour le verrouillage de fichier
 import tempfile
+import json
+import threading
+import time
+import base64
+import hmac
+import hashlib
+import requests
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict
-import json
 
 # Imports pour le bot Telegram
 from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
@@ -27,15 +33,9 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 # Imports pour l'API web
 from flask import Flask, request, jsonify, render_template_string, redirect
 from flask_cors import CORS
-import threading
-import time
-import base64
 
 # Imports pour PayPal
 import paypalrestsdk
-import hmac
-import hashlib
-import requests
 from decimal import Decimal
 
 # Imports pour la base de données
@@ -611,6 +611,64 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"❌ Erreur récupération profil: {e}")
             return {}
+
+    def update_user_profile(self, telegram_id: int, display_name: str = None, paypal_email: str = None) -> bool:
+        """Mettre à jour le profil d'un utilisateur"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                updates = []
+                values = []
+                
+                if display_name is not None:
+                    updates.append("display_name = %s" if self.is_postgres else "display_name = ?")
+                    values.append(display_name)
+                
+                if paypal_email is not None:
+                    if paypal_email.lower() == 'supprimer':
+                        updates.append("paypal_email = NULL")
+                    else:
+                        updates.append("paypal_email = %s" if self.is_postgres else "paypal_email = ?")
+                        values.append(paypal_email)
+                
+                if not updates:
+                    return True  # Rien à mettre à jour
+                
+                values.append(telegram_id)
+                
+                query = f"""
+                    UPDATE users 
+                    SET {', '.join(updates)}
+                    WHERE telegram_id = {'%s' if self.is_postgres else '?'}
+                """
+                
+                cursor.execute(query, values)
+                return cursor.rowcount > 0
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur mise à jour profil: {e}")
+            return False
+
+    def delete_user_profile(self, telegram_id: int) -> bool:
+        """Supprimer complètement le profil d'un utilisateur"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Supprimer dans l'ordre pour respecter les contraintes de clés étrangères
+                tables = ['payments', 'scores', 'users']
+                
+                for table in tables:
+                    cursor.execute(f"""
+                        DELETE FROM {table} WHERE telegram_id = {'%s' if self.is_postgres else '?'}
+                    """, (telegram_id,))
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur suppression profil: {e}")
+            return False
 
     def calculate_monthly_prizes(self, month_year: str = None) -> Dict:
         """Calculer les prix du mois basés sur les paiements"""
@@ -1714,35 +1772,149 @@ async def process_update_manually(bot, update):
             text = update.message.text
             user = update.message.from_user
             
-            # Vérifier si l'utilisateur est en train de configurer son nom
-            if user.id in user_states and user_states[user.id] == "waiting_for_name":
-                # Valider le nom
-                if text and len(text.strip()) >= 2 and len(text.strip()) <= 30:
-                    display_name = text.strip()
-                    if db.update_display_name(user.id, display_name):
-                        del user_states[user.id]  # Supprimer l'état
+            # Vérifier si l'utilisateur est en cours de configuration
+            if user.id in user_states:
+                state = user_states[user.id]
+                
+                if state == "waiting_for_name":
+                    # Valider le nom
+                    if text and len(text.strip()) >= 2 and len(text.strip()) <= 30:
+                        # Sauvegarder le nom temporairement
+                        display_name = text.strip()
+                        
+                        # Demander l'email PayPal
                         await bot.send_message(
                             chat_id=update.message.chat_id,
-                            text=f"✅ **Nom d'affichage mis à jour !**\n\n" +
-                                 f"🏷️ Votre nouveau nom: **{display_name}**\n\n" +
-                                 "Utilisez /profile pour voir votre profil complet.",
+                            text="✅ **Nom enregistré !**\n\n" +
+                                 "**Étape 2/2 : Email PayPal (optionnel)**\n\n" +
+                                 "📧 Renseignez votre email PayPal pour recevoir vos gains en cas de victoire.\n\n" +
+                                 "💡 Vous pouvez taper 'passer' si vous préférez le renseigner plus tard.\n\n" +
+                                 "📝 Envoyez votre email PayPal :",
                             parse_mode='Markdown'
                         )
-                        # Afficher le menu principal
-                        await handle_start_command(bot, update.message)
+                        user_states[user.id] = f"waiting_for_email:{display_name}"
                     else:
                         await bot.send_message(
                             chat_id=update.message.chat_id,
-                            text="❌ Erreur lors de la mise à jour. Réessayez :"
+                            text="❌ **Nom invalide**\n\n" +
+                                 "Le nom doit contenir entre 2 et 30 caractères.\n" +
+                                 "📝 Envoyez-moi un nouveau nom :"
                         )
-                else:
-                    await bot.send_message(
-                        chat_id=update.message.chat_id,
-                        text="❌ **Nom invalide**\n\n" +
-                             "Le nom doit contenir entre 2 et 30 caractères.\n" +
-                             "📝 Envoyez-moi un nouveau nom :"
+                    return
+                
+                elif state.startswith("waiting_for_email:"):
+                    # Récupérer le nom depuis l'état
+                    display_name = state.split(":", 1)[1]
+                    
+                    # Valider l'email ou permettre de passer
+                    paypal_email = None
+                    if text.lower().strip() not in ['passer', 'skip', 'non', 'no']:
+                        # Validation simple de l'email
+                        if '@' in text and '.' in text.split('@')[1]:
+                            paypal_email = text.strip()
+                        else:
+                            await bot.send_message(
+                                chat_id=update.message.chat_id,
+                                text="❌ **Email invalide**\n\n" +
+                                     "Veuillez entrer un email valide ou tapez 'passer'.\n" +
+                                     "📝 Email PayPal :"
+                            )
+                            return
+                    
+                    # Créer/mettre à jour l'utilisateur avec les nouvelles informations
+                    success = db.update_user_profile(
+                        telegram_id=user.id,
+                        display_name=display_name,
+                        paypal_email=paypal_email
                     )
-                return
+                    
+                    if success:
+                        # Nettoyer l'état
+                        del user_states[user.id]
+                        
+                        # Message de confirmation et redirection vers le profil
+                        text_response = "✅ **Profil configuré !**\n\n"
+                        text_response += f"🏷️ **Nom:** {display_name}\n"
+                        if paypal_email:
+                            text_response += f"📧 **Email PayPal:** {paypal_email}\n"
+                        text_response += f"\n🎮 **Votre profil est maintenant prêt !**\n"
+                        text_response += f"💰 Utilisez /payment pour participer au concours."
+                        
+                        await bot.send_message(
+                            chat_id=update.message.chat_id,
+                            text=text_response,
+                            parse_mode='Markdown'
+                        )
+                        
+                        # Afficher le profil complet
+                        await handle_profile_command(bot, update.message)
+                    else:
+                        await bot.send_message(
+                            chat_id=update.message.chat_id,
+                            text="❌ Erreur lors de la sauvegarde. Réessayez avec /profile"
+                        )
+                    return
+                
+                elif state == "edit_name":
+                    # Modification du nom
+                    if text and len(text.strip()) >= 2 and len(text.strip()) <= 30:
+                        success = db.update_user_profile(user.id, display_name=text.strip())
+                        del user_states[user.id]
+                        
+                        if success:
+                            await bot.send_message(
+                                chat_id=update.message.chat_id,
+                                text=f"✅ **Nom modifié !**\n\nVotre nouveau nom : {text.strip()}"
+                            )
+                            # Revenir au profil
+                            await handle_profile_command(bot, update.message)
+                        else:
+                            await bot.send_message(
+                                chat_id=update.message.chat_id,
+                                text="❌ Erreur lors de la modification."
+                            )
+                    else:
+                        await bot.send_message(
+                            chat_id=update.message.chat_id,
+                            text="❌ **Nom invalide**\n\nLe nom doit contenir entre 2 et 30 caractères.\n📝 Nouveau nom :"
+                        )
+                    return
+                
+                elif state == "edit_email":
+                    # Modification de l'email
+                    paypal_email = None
+                    if text.lower().strip() not in ['supprimer', 'delete', 'remove']:
+                        if '@' in text and '.' in text.split('@')[1]:
+                            paypal_email = text.strip()
+                        else:
+                            await bot.send_message(
+                                chat_id=update.message.chat_id,
+                                text="❌ **Email invalide**\n\nVeuillez entrer un email valide ou tapez 'supprimer' pour l'effacer.\n📧 Email PayPal :"
+                            )
+                            return
+                    
+                    success = db.update_user_profile(user.id, paypal_email=paypal_email)
+                    del user_states[user.id]
+                    
+                    if success:
+                        if paypal_email:
+                            await bot.send_message(
+                                chat_id=update.message.chat_id,
+                                text=f"✅ **Email modifié !**\n\nNouveau email : {paypal_email}"
+                            )
+                        else:
+                            await bot.send_message(
+                                chat_id=update.message.chat_id,
+                                text="✅ **Email supprimé !**"
+                            )
+                        # Revenir au profil
+                        await handle_profile_command(bot, update.message)
+                    else:
+                        await bot.send_message(
+                            chat_id=update.message.chat_id,
+                            text="❌ Erreur lors de la modification."
+                        )
+                    return
             
             # Commandes normales
             if text == '/start':
@@ -1795,6 +1967,24 @@ async def process_update_manually(bot, update):
 
 # États pour la conversation de changement de nom
 user_states = {}
+
+async def start_user_setup(bot, message):
+    """Commencer la configuration d'un nouvel utilisateur"""
+    user = message.from_user
+    user_states[user.id] = "waiting_for_name"
+    
+    text = f"👋 **Bienvenue {user.first_name} !**\n\n"
+    text += f"🏷️ **Configuration de votre profil**\n\n"
+    text += f"Pour participer au Dino Challenge, nous avons besoin de quelques informations :\n\n"
+    text += f"**Étape 1/2 : Nom d'affichage**\n"
+    text += f"Ce nom apparaîtra dans le classement.\n\n"
+    text += f"📝 Envoyez-moi le nom que vous voulez utiliser :"
+    
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text,
+        parse_mode='Markdown'
+    )
 
 async def handle_callback_query(bot, callback_query):
     """Gérer les callbacks des boutons"""
@@ -1971,24 +2161,74 @@ async def handle_callback_query(bot, callback_query):
             await handle_payment_command(bot, callback_query.message)
         
         elif data == "setup_profile":
-            user_states[user.id] = "waiting_for_name"
-            await bot.send_message(
-                chat_id=chat_id,
-                text="👋 **Configuration de votre profil**\n\n" +
-                     "🏷️ **Choisissez votre nom d'affichage**\n" +
-                     "Ce nom apparaîtra dans le classement.\n\n" +
-                     "📝 Envoyez-moi le nom que vous voulez utiliser :",
-                parse_mode='Markdown'
-            )
+            # Démarrer la configuration pour un nouvel utilisateur
+            await start_user_setup(bot, callback_query.message)
         
-        elif data == "change_name":
-            user_states[user.id] = "waiting_for_name"
+        elif data == "change_name" or data == "edit_name":
+            user_states[user.id] = "edit_name"
             await bot.send_message(
                 chat_id=chat_id,
-                text="✏️ **Changer votre nom d'affichage**\n\n" +
+                text="✏️ **Modifier votre nom d'affichage**\n\n" +
                      "📝 Envoyez-moi votre nouveau nom :",
                 parse_mode='Markdown'
             )
+        
+        elif data == "edit_email":
+            user_states[user.id] = "edit_email"
+            await bot.send_message(
+                chat_id=chat_id,
+                text="📧 **Modifier votre email PayPal**\n\n" +
+                     "📝 Envoyez votre nouvel email PayPal ou tapez 'supprimer' pour l'effacer :",
+                parse_mode='Markdown'
+            )
+        
+        elif data == "delete_profile":
+            # Demander confirmation
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [
+                [InlineKeyboardButton("🗑️ Confirmer la suppression", callback_data="confirm_delete")],
+                [InlineKeyboardButton("❌ Annuler", callback_data="cancel_delete")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=callback_query.message.message_id,
+                text="⚠️ **Suppression du profil**\n\n" +
+                     "Êtes-vous sûr de vouloir supprimer votre profil ?\n" +
+                     "Cette action est irréversible et supprimera :\n\n" +
+                     "• Votre nom d'affichage\n" +
+                     "• Votre email PayPal\n" +
+                     "• Tous vos scores\n" +
+                     "• Vos paiements\n\n" +
+                     "⚠️ **Cette action ne peut pas être annulée !**",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        
+        elif data == "confirm_delete":
+            # Supprimer le profil
+            success = db.delete_user_profile(user.id)
+            if success:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=callback_query.message.message_id,
+                    text="✅ **Profil supprimé**\n\n" +
+                         "Votre profil a été entièrement supprimé.\n" +
+                         "Utilisez /start pour créer un nouveau profil.",
+                    parse_mode='Markdown'
+                )
+            else:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=callback_query.message.message_id,
+                    text="❌ **Erreur**\n\nImpossible de supprimer le profil. Contactez l'support.",
+                    parse_mode='Markdown'
+                )
+        
+        elif data == "cancel_delete":
+            # Retourner au profil
+            await handle_profile_command(bot, callback_query.message)
             
     except Exception as e:
         logger.error(f"❌ Erreur callback query: {e}")
@@ -2052,7 +2292,7 @@ async def handle_start_command(bot, message):
         text += f"⚠️ **Configurez votre profil puis payez pour participer**\n"
         keyboard = [
             [
-                InlineKeyboardButton("👤 Configurer mon Profil", callback_data="setup_profile"),
+                InlineKeyboardButton("👤 Mon Profil", callback_data="profile"),
                 InlineKeyboardButton("💰 Participer (11 CHF)", callback_data="payment")
             ],
             [
@@ -2182,70 +2422,64 @@ async def handle_leaderboard_command(bot, message):
         )
 
 async def handle_profile_command(bot, message):
-    """Gérer la commande /profile"""
+    """Gérer la commande /profile avec toutes les fonctionnalités"""
     user = message.from_user
     db_user = db.get_user_profile(user.id)
     
     if not db_user:
-        db_user = db.create_or_get_user(user.id, user.username, user.first_name)
+        # Nouvel utilisateur - commencer la configuration
+        await start_user_setup(bot, message)
+        return
     
-    # Récupérer les stats de l'utilisateur
-    current_month = datetime.now().strftime('%Y-%m')
-    user_scores = []
+    # Vérifier si le profil est complet
+    if not db_user.get('display_name'):
+        await start_user_setup(bot, message)
+        return
+    
+    # Récupérer les informations du profil
     has_access = db.check_user_access(user.id)
+    position_info = db.get_user_position_and_prize(user.id)
     
-    try:
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT score, created_at 
-                FROM scores 
-                WHERE telegram_id = %s AND month_year = %s 
-                ORDER BY score DESC 
-                LIMIT 5
-            """ if db.is_postgres else """
-                SELECT score, created_at 
-                FROM scores 
-                WHERE telegram_id = ? AND month_year = ? 
-                ORDER BY score DESC 
-                LIMIT 5
-            """, (user.id, current_month))
-            user_scores = cursor.fetchall()
-    except Exception as e:
-        logger.error(f"❌ Erreur récupération profil: {e}")
-    
-    display_name = db_user.get('display_name') or db_user.get('first_name') or user.first_name or 'Anonyme'
+    display_name = db_user.get('display_name') or user.first_name or 'Anonyme'
+    paypal_email = db_user.get('paypal_email', 'Non renseigné')
     
     text = f"👤 **PROFIL - {display_name}**\n\n"
     text += f"🏷️ **Nom d'affichage:** {display_name}\n"
+    text += f"📧 **Email PayPal:** {paypal_email}\n"
     text += f"🆔 **ID Telegram:** {user.id}\n"
-    text += f"� **Nom Telegram:** {user.first_name}\n"
     text += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')[:10] if db_user.get('registration_date') else 'Inconnue'}\n\n"
     
     if has_access:
         text += f"✅ **Statut:** Accès actif ce mois\n\n"
+        
+        if position_info['position']:
+            text += f"🏆 **Position:** #{position_info['position']}/{position_info['total_players']}\n"
+            if position_info['prize'] > 0:
+                text += f"💰 **Gain potentiel:** {position_info['prize']:.2f} CHF\n"
+        else:
+            text += f"🎮 **Jouez pour être classé !**\n"
     else:
-        text += f"❌ **Statut:** Pas d'accès ce mois\n\n"
+        text += f"❌ **Statut:** Pas d'accès ce mois\n"
+        text += f"💡 Payez votre participation pour concourir\n"
     
-    if user_scores:
-        text += f"🏆 **TOP 5 DE VOS SCORES CE MOIS:**\n"
-        for i, score_data in enumerate(user_scores, 1):
-            score = dict(score_data)['score']
-            text += f"   {i}. {score:,} points\n"
-        text += f"\n📊 **Total parties:** {len(user_scores)}\n"
-    else:
-        text += "🎮 **Aucun score ce mois-ci**\n"
-    
-    # Boutons
+    # Créer les boutons du profil
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     
-    keyboard = [
-        [InlineKeyboardButton("✏️ Changer mon nom", callback_data="change_name")],
-        [InlineKeyboardButton("🎮 Jouer", url=f"{GAME_URL}?telegram_id={user.id}")]
-    ]
+    keyboard = []
     
+    # Bouton jouer ou payer
     if has_access:
-        keyboard[1] = [InlineKeyboardButton("🎮 Jouer (Compétition)", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition")]
+        keyboard.append([InlineKeyboardButton("🎮 Jouer au Dino Challenge", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition")])
+    else:
+        keyboard.append([InlineKeyboardButton("💰 Payer ma participation (11 CHF)", callback_data="payment")])
+    
+    # Boutons de gestion du profil
+    keyboard.append([
+        InlineKeyboardButton("✏️ Modifier mon nom", callback_data="edit_name"),
+        InlineKeyboardButton("📧 Modifier email PayPal", callback_data="edit_email")
+    ])
+    
+    keyboard.append([InlineKeyboardButton("🗑️ Supprimer mon profil", callback_data="delete_profile")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
