@@ -383,7 +383,14 @@ class DatabaseManager:
                 """, (telegram_id, today))
                 
                 result = cursor.fetchone()
-                daily_games = result[0] if result else 0
+                if result:
+                    # Gérer les dictionnaires (PostgreSQL) et les tuples (SQLite)
+                    if isinstance(result, dict):
+                        daily_games = result['count'] or 0
+                    else:
+                        daily_games = result[0] if result[0] is not None else 0
+                else:
+                    daily_games = 0
                 
                 if daily_games >= 5:
                     return {'success': False, 'error': 'Limite quotidienne atteinte (5 parties/jour)'}
@@ -616,8 +623,14 @@ class DatabaseManager:
                 payment_count = 0
                 if result:
                     try:
-                        payment_count = int(result[0]) if result[0] is not None else 0
-                    except (IndexError, TypeError, ValueError) as conv_error:
+                        # Gérer les dictionnaires (PostgreSQL) et les tuples (SQLite)
+                        if isinstance(result, dict):
+                            # PostgreSQL avec dict_row
+                            payment_count = int(result['count'] or 0)
+                        else:
+                            # SQLite ou tuple
+                            payment_count = int(result[0]) if result[0] is not None else 0
+                    except (IndexError, TypeError, ValueError, KeyError) as conv_error:
                         logger.warning(f"⚠️ Erreur conversion payment_count: {conv_error}, result: {result}")
                         payment_count = 0
                 
@@ -638,8 +651,14 @@ class DatabaseManager:
                 subscription_count = 0
                 if result:
                     try:
-                        subscription_count = int(result[0]) if result[0] is not None else 0
-                    except (IndexError, TypeError, ValueError) as conv_error:
+                        # Gérer les dictionnaires (PostgreSQL) et les tuples (SQLite)
+                        if isinstance(result, dict):
+                            # PostgreSQL avec dict_row
+                            subscription_count = int(result['count'] or 0)
+                        else:
+                            # SQLite ou tuple
+                            subscription_count = int(result[0]) if result[0] is not None else 0
+                    except (IndexError, TypeError, ValueError, KeyError) as conv_error:
                         logger.warning(f"⚠️ Erreur conversion subscription_count: {conv_error}, result: {result}")
                         subscription_count = 0
                 
@@ -1794,7 +1813,13 @@ def get_telegram_id_from_subscription(subscription_id):
             """, (subscription_id,))
             
             result = cursor.fetchone()
-            return result[0] if result else None
+            if result:
+                # Gérer les dictionnaires (PostgreSQL) et les tuples (SQLite)
+                if isinstance(result, dict):
+                    return result['telegram_id']
+                else:
+                    return result[0]
+            return None
             
     except Exception as e:
         logger.error(f"❌ Erreur get_telegram_id_from_subscription: {e}")
@@ -2431,7 +2456,7 @@ async def handle_play_game(bot, message):
 """
 
         keyboard = [
-            [InlineKeyboardButton("� CHOISIR MON OPTION DE PAIEMENT", callback_data="payment")],
+            [InlineKeyboardButton("🏆 JOUER EN MODE CLASSÉ", callback_data="payment")],
             [InlineKeyboardButton("🆓 Mode démo (gratuit)", url=f"{GAME_URL}?mode=demo")],
             [
                 InlineKeyboardButton("🏆 Voir le classement", callback_data="leaderboard"),
