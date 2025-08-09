@@ -617,6 +617,26 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
+                # D'abord vérifier le champ has_paid_current_month
+                cursor.execute("""
+                    SELECT has_paid_current_month FROM users 
+                    WHERE telegram_id = %s
+                """ if self.is_postgres else """
+                    SELECT has_paid_current_month FROM users 
+                    WHERE telegram_id = ?
+                """, (telegram_id,))
+                
+                result = cursor.fetchone()
+                if result:
+                    if isinstance(result, dict):
+                        has_paid = bool(result['has_paid_current_month'])
+                    else:
+                        has_paid = bool(result[0])
+                    
+                    if has_paid:
+                        logger.info(f"✅ Accès accordé via has_paid_current_month: {telegram_id}")
+                        return True
+                
                 # Vérifier les paiements uniques pour ce mois
                 cursor.execute("""
                     SELECT COUNT(*) FROM payments 
