@@ -2192,6 +2192,10 @@ async def handle_callback_query(bot, callback_query):
             # Afficher l'aide complète
             await handle_help_command(bot, callback_query.message)
         
+        elif data == "support":
+            # Afficher le support technique
+            await handle_support_command(bot, callback_query.message)
+        
         elif data == "setup_profile":
             # Démarrer la configuration pour un nouvel utilisateur
             await start_user_setup(bot, callback_query.message)
@@ -2776,7 +2780,7 @@ Les gains sont calculés sur la cagnotte totale :
 • Nouveau concours commence immédiatement
 
 🆘 **Support technique :**
-👤 **@Nox_archeo** (Organisateur officiel)
+👤 **@Lilith66store** (Organisateur officiel)
 📧 Disponible 7j/7 pour toute question
 
 ⚡ **Système automatisé :**
@@ -2787,23 +2791,47 @@ Les gains sont calculés sur la cagnotte totale :
 
 🎯 **Astuce :** Configurez votre email PayPal dans /profile pour recevoir vos gains automatiquement !"""
 
+    # Vérifier l'accès utilisateur pour choisir le bon bouton de jeu
+    has_access = db.check_user_access(message.from_user.id)
+    
     # Ajouter des boutons pour actions rapides
-    keyboard = [
-        [
-            InlineKeyboardButton("🎮 Jouer maintenant", url=GAME_URL),
-            InlineKeyboardButton("💰 Participer", callback_data="payment")
-        ],
-        [
-            InlineKeyboardButton("🏆 Classement", callback_data="leaderboard"),
-            InlineKeyboardButton("👤 Mon profil", callback_data="profile")
-        ],
-        [
-            InlineKeyboardButton("🆘 Support @Nox_archeo", url="https://t.me/Nox_archeo"),
-        ],
-        [
-            InlineKeyboardButton("🏠 Retour au menu", callback_data="start")
+    if has_access:
+        # Utilisateur avec accès premium - bouton vers mode compétition
+        keyboard = [
+            [
+                InlineKeyboardButton("🎮 JOUER MAINTENANT (Mode Compétition)", url=f"{GAME_URL}?telegram_id={message.from_user.id}&mode=competition"),
+                InlineKeyboardButton("🆓 Mode Démo", url=f"{GAME_URL}?mode=demo")
+            ],
+            [
+                InlineKeyboardButton("💰 Participer", callback_data="payment"),
+                InlineKeyboardButton("🏆 Classement", callback_data="leaderboard")
+            ],
+            [
+                InlineKeyboardButton("👤 Mon profil", callback_data="profile"),
+                InlineKeyboardButton("🆘 Support", callback_data="support")
+            ],
+            [
+                InlineKeyboardButton("� Retour au menu", callback_data="start")
+            ]
         ]
-    ]
+    else:
+        # Utilisateur sans accès - bouton vers démo + incitation à payer
+        keyboard = [
+            [
+                InlineKeyboardButton("🆓 Essayer en Mode Démo", url=f"{GAME_URL}?mode=demo"),
+                InlineKeyboardButton("💰 Débloquer Mode Compétition", callback_data="payment")
+            ],
+            [
+                InlineKeyboardButton("🏆 Classement", callback_data="leaderboard"),
+                InlineKeyboardButton("👤 Mon profil", callback_data="profile")
+            ],
+            [
+                InlineKeyboardButton("🆘 Support", callback_data="support")
+            ],
+            [
+                InlineKeyboardButton("🏠 Retour au menu", callback_data="start")
+            ]
+        ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -2831,7 +2859,7 @@ async def handle_support_command(bot, message):
 • Autre problème
 
 📞 **Contact direct :**
-👤 **@Nox_archeo** (Support officiel)
+👤 **@Lilith66store** (Support officiel)
 
 📧 **Comment nous contacter :**
 1. Cliquez sur le bouton ci-dessous
@@ -2844,7 +2872,7 @@ async def handle_support_command(bot, message):
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     
     keyboard = [
-        [InlineKeyboardButton("📞 Contacter le Support", url="https://t.me/Nox_archeo")],
+        [InlineKeyboardButton("📞 Contacter le Support", url="https://t.me/Lilith66store")],
         [InlineKeyboardButton("🏠 Retour au menu", callback_data="start")]
     ]
     
@@ -2908,7 +2936,7 @@ async def notify_monthly_winners():
                 else:
                     text += f"⚠️ **Action requise :**\n"
                     text += f"Veuillez configurer votre email PayPal avec /profile pour recevoir votre gain.\n"
-                    text += f"📞 Ou contactez le support : @Nox_archeo\n\n"
+                    text += f"📞 Ou contactez le support : @Lilith66store\n\n"
                 
                 text += f"🎊 Merci d'avoir participé au Dino Challenge !\n"
                 text += f"🆕 Le nouveau concours a déjà commencé - bonne chance !"
