@@ -1770,6 +1770,15 @@ async def process_update_manually(bot, update):
                 )
             elif text.startswith('/score '):
                 await handle_score_command(bot, update.message)
+            # Gestion des boutons persistants (texte sans /)
+            elif text in ["🎮 Jouer", "Jouer", "JOUER"]:
+                await handle_start_command(bot, update.message)
+            elif text in ["🏆 Classement", "Classement", "CLASSEMENT"]:
+                await handle_leaderboard_command(bot, update.message)
+            elif text in ["👤 Profil", "Profil", "PROFIL"]:
+                await handle_profile_command(bot, update.message)
+            elif text in ["❓ Aide et règles", "aide/règle", "Aide", "AIDE", "Règles", "REGLES"]:
+                await handle_help_command(bot, update.message)
             else:
                 # Message non reconnu
                 await bot.send_message(
