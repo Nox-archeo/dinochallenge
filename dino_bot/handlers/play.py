@@ -67,7 +67,7 @@ async def score_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_valid, score = game_manager.validate_score_format(score_text)
     if not is_valid:
         await update.message.reply_text(
-            "❌ Score invalide. Le score doit être un nombre entre 0 et 99999.\n"
+            "❌ Score invalide. Le score doit être un nombre positif.\n"
             "Exemple : `/score 1435`"
         )
         return

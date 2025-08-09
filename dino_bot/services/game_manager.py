@@ -1,6 +1,11 @@
 import os
 from typing import Dict, Any
-from services.user_manager import UserManager
+from se        # Valider le score
+        if score < 0:
+            return {
+                'success': False,
+                'message': 'Le score doit être un nombre positif.'
+            }.user_manager import UserManager
 from services.score_manager import ScoreManager
 
 class GameManager:
@@ -112,7 +117,7 @@ class GameManager:
         """Valide le format d'un score soumis"""
         try:
             score = int(score_text)
-            if 0 <= score <= 99999:
+            if score >= 0:
                 return True, score
             else:
                 return False, 0

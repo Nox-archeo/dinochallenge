@@ -793,7 +793,7 @@ def submit_score():
         score = int(score)
         
         # Validation du score
-        if score < 0 or score > 99999:
+        if score < 0:
             return jsonify({'error': 'Score invalide'}), 400
         
         # Sauvegarder le score
