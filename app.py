@@ -88,6 +88,9 @@ PAYPAL_BASE_URL = 'https://api-m.paypal.com' if PAYPAL_MODE == 'live' else 'http
 # Prix en CHF (taxes incluses)
 MONTHLY_PRICE_CHF = Decimal('11.00')
 
+# État des utilisateurs pour les conversations (édition profil)
+user_states = {}
+
 # Configuration PayPal SDK (pour la compatibilité) - MODE PRODUCTION
 if PAYPAL_CLIENT_ID and PAYPAL_SECRET_KEY:
     paypalrestsdk.configure({
@@ -319,18 +322,42 @@ class DatabaseManager:
             logger.error(f"❌ Erreur création utilisateur: {e}")
             return {}
     
-    def add_score(self, telegram_id: int, score: int) -> bool:
-        """Ajouter un score pour un utilisateur"""
+    def add_score(self, telegram_id: int, score: int) -> Dict:
+        """Ajouter un score pour un utilisateur avec vérifications"""
         try:
             # S'assurer que l'utilisateur existe
             user = self.create_or_get_user(telegram_id)
             if not user:
-                return False
+                return {'success': False, 'error': 'Utilisateur non trouvé'}
             
-            current_month = datetime.now().strftime('%Y-%m')
+            # Vérifier l'accès premium
+            has_access = self.check_user_access(telegram_id)
+            if not has_access:
+                return {'success': False, 'error': 'Accès premium requis'}
+            
+            # Vérifier la limite de 5 parties par jour
+            today = datetime.now().date()
             
             with self.get_connection() as conn:
                 cursor = conn.cursor()
+                
+                # Compter les parties d'aujourd'hui
+                cursor.execute("""
+                    SELECT COUNT(*) FROM scores 
+                    WHERE telegram_id = %s AND DATE(created_at) = %s
+                """ if self.is_postgres else """
+                    SELECT COUNT(*) FROM scores 
+                    WHERE telegram_id = ? AND DATE(created_at) = ?
+                """, (telegram_id, today))
+                
+                result = cursor.fetchone()
+                daily_games = result[0] if result else 0
+                
+                if daily_games >= 5:
+                    return {'success': False, 'error': 'Limite quotidienne atteinte (5 parties/jour)'}
+                
+                # Ajouter le score
+                current_month = datetime.now().strftime('%Y-%m')
                 
                 if self.is_postgres:
                     cursor.execute("""
@@ -344,8 +371,13 @@ class DatabaseManager:
                     """, (user['id'], telegram_id, score, current_month))
                 
                 conn.commit()
-                logger.info(f"✅ Score ajouté: {telegram_id} = {score}")
-                return True
+                logger.info(f"✅ Score ajouté: {telegram_id} = {score} (partie {daily_games + 1}/5)")
+                
+                return {
+                    'success': True, 
+                    'daily_games': daily_games + 1,
+                    'remaining_games': 4 - daily_games
+                }
                 
         except Exception as e:
             logger.error(f"❌ Erreur ajout score: {e}")
@@ -780,6 +812,71 @@ class DatabaseManager:
                 'prize_info': self.calculate_monthly_prizes(month_year)
             }
 
+    def get_monthly_winners(self, month_year: str = None) -> List[Dict]:
+        """Obtenir les 3 gagnants du mois"""
+        if not month_year:
+            # Mois précédent (pour les notifications en fin de mois)
+            last_month = datetime.now().replace(day=1) - timedelta(days=1)
+            month_year = last_month.strftime('%Y-%m')
+        
+        try:
+            leaderboard = self.get_leaderboard(month_year, 3)  # Top 3
+            prize_info = self.calculate_monthly_prizes(month_year)
+            
+            winners = []
+            for i, player in enumerate(leaderboard):
+                position = i + 1
+                if position == 1:
+                    prize = prize_info['prizes']['first']
+                elif position == 2:
+                    prize = prize_info['prizes']['second']  
+                elif position == 3:
+                    prize = prize_info['prizes']['third']
+                else:
+                    continue
+                    
+                winners.append({
+                    'telegram_id': player['telegram_id'],
+                    'display_name': player['display_name'],
+                    'position': position,
+                    'score': player['best_score'],
+                    'prize': prize,
+                    'month_year': month_year
+                })
+            
+            return winners
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur récupération gagnants: {e}")
+            return []
+
+    def reset_monthly_leaderboard(self) -> bool:
+        """Reset du classement mensuel (appelé le 1er de chaque mois)"""
+        try:
+            current_month = datetime.now().strftime('%Y-%m')
+            logger.info(f"🔄 Reset du classement mensuel pour {current_month}")
+            
+            # Pas besoin de supprimer les scores, ils sont filtrés par month_year
+            # Le nouveau mois commence automatiquement
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur reset mensuel: {e}")
+            return False
+
+    def get_user_profile_with_paypal(self, telegram_id: int) -> Dict:
+        """Récupérer le profil avec info PayPal pour les paiements"""
+        try:
+            profile = self.get_user_profile(telegram_id)
+            if profile and profile.get('paypal_email'):
+                return profile
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur profil PayPal: {e}")
+            return None
+
 # Instance globale du gestionnaire de base de données
 db = DatabaseManager(DATABASE_URL)
 
@@ -865,9 +962,9 @@ def submit_score():
             return jsonify({'error': 'Score invalide'}), 400
         
         # Sauvegarder le score
-        success = db.add_score(telegram_id, score)
+        result = db.add_score(telegram_id, score)
         
-        if success:
+        if result['success']:
             # Notifier le bot Telegram si possible
             if telegram_app:
                 asyncio.create_task(notify_new_score(telegram_id, score))
@@ -876,10 +973,12 @@ def submit_score():
                 'success': True,
                 'message': 'Score enregistré avec succès',
                 'score': score,
-                'telegram_id': telegram_id
+                'telegram_id': telegram_id,
+                'daily_games': result.get('daily_games', 1),
+                'remaining_games': result.get('remaining_games', 4)
             })
         else:
-            return jsonify({'error': 'Erreur lors de l\'enregistrement'}), 500
+            return jsonify({'error': result.get('error', 'Erreur lors de l\'enregistrement')}), 400
             
     except Exception as e:
         logger.error(f"❌ Erreur soumission score: {e}")
@@ -1929,19 +2028,8 @@ async def process_update_manually(bot, update):
                 await handle_cancel_subscription_command(bot, update.message)
             elif text == '/help':
                 await handle_help_command(bot, update.message)
-            elif text == '/score':
-                # Commande /score sans paramètre - expliquer l'usage
-                await bot.send_message(
-                    chat_id=update.message.chat_id,
-                    text="🎯 **Soumettre un score**\n\n" +
-                         "Pour soumettre votre score, utilisez :\n" +
-                         "`/score [votre_score]`\n\n" +
-                         "**Exemple :** `/score 1250`\n\n" +
-                         "💡 Vous devez avoir payé votre participation (11 CHF) pour soumettre des scores.",
-                    parse_mode='Markdown'
-                )
-            elif text.startswith('/score '):
-                await handle_score_command(bot, update.message)
+            elif text == '/support':
+                await handle_support_command(bot, update.message)
             # Gestion des boutons persistants (texte sans /)
             elif text in ["🎮 Jouer", "Jouer", "JOUER"]:
                 # Fonction de jeu spécifique (pas /start)
@@ -2666,75 +2754,246 @@ Contactez l'organisateur pour toute question.
         parse_mode='Markdown'
     )
 
-async def handle_score_command(bot, message):
-    """Gérer la commande /score pour soumettre un score"""
+async def handle_support_command(bot, message):
+    """Gérer la commande /support"""
+    user = message.from_user
+    
+    text = f"""🆘 **SUPPORT TECHNIQUE - DINO CHALLENGE**
+
+👋 Salut {user.first_name} !
+
+❓ **Vous rencontrez un problème ?**
+
+• Paiement non reconnu
+• Erreur technique du jeu  
+• Score non comptabilisé
+• Question sur les règles
+• Autre problème
+
+📞 **Contact direct :**
+👤 **@Nox_archeo** (Support officiel)
+
+📧 **Comment nous contacter :**
+1. Cliquez sur le bouton ci-dessous
+2. Décrivez votre problème en détail
+3. Joignez des captures d'écran si nécessaire
+
+⏰ **Délai de réponse :** 24-48h maximum
+"""
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    keyboard = [
+        [InlineKeyboardButton("📞 Contacter le Support", url="https://t.me/Nox_archeo")],
+        [InlineKeyboardButton("🏠 Retour au menu", callback_data="start")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+# Suppression de handle_score_command - plus utilisé (scores automatiques depuis le jeu)
+
+async def notify_monthly_winners():
+    """Notification automatique des gagnants en fin de mois"""
+    try:
+        # Obtenir les gagnants du mois précédent
+        winners = db.get_monthly_winners()
+        
+        if not winners:
+            logger.info("📊 Aucun gagnant trouvé pour le mois précédent")
+            return
+        
+        bot = setup_telegram_bot()
+        if not bot:
+            logger.error("❌ Impossible de configurer le bot pour les notifications")
+            return
+        
+        month_name = datetime.now().replace(day=1) - timedelta(days=1)
+        month_formatted = month_name.strftime('%B %Y')
+        
+        logger.info(f"🏆 Notification des {len(winners)} gagnants de {month_formatted}")
+        
+        for winner in winners:
+            try:
+                # Obtenir le profil PayPal
+                profile = db.get_user_profile_with_paypal(winner['telegram_id'])
+                
+                # Préparer le message de félicitations
+                if winner['position'] == 1:
+                    emoji = "🥇"
+                    position_text = "1ère place"
+                elif winner['position'] == 2:
+                    emoji = "🥈" 
+                    position_text = "2e place"
+                else:
+                    emoji = "🥉"
+                    position_text = "3e place"
+                
+                text = f"{emoji} **FÉLICITATIONS !**\n\n"
+                text += f"🎉 Vous avez remporté la **{position_text}** du concours Dino Challenge de **{month_formatted}** !\n\n"
+                text += f"📊 **Votre score :** {winner['score']:,} points\n"
+                text += f"💰 **Votre gain :** {winner['prize']:.2f} CHF\n\n"
+                
+                if profile and profile.get('paypal_email'):
+                    text += f"💳 **Paiement PayPal**\n"
+                    text += f"📧 Envoyé à : {profile['paypal_email']}\n"
+                    text += f"⏰ Délai : 2-3 jours ouvrables\n\n"
+                    text += f"✅ Votre gain sera automatiquement transféré sur votre compte PayPal.\n"
+                else:
+                    text += f"⚠️ **Action requise :**\n"
+                    text += f"Veuillez configurer votre email PayPal avec /profile pour recevoir votre gain.\n"
+                    text += f"📞 Ou contactez le support : @Nox_archeo\n\n"
+                
+                text += f"🎊 Merci d'avoir participé au Dino Challenge !\n"
+                text += f"🆕 Le nouveau concours a déjà commencé - bonne chance !"
+                
+                # Envoyer la notification
+                await bot.send_message(
+                    chat_id=winner['telegram_id'],
+                    text=text,
+                    parse_mode='Markdown'
+                )
+                
+                logger.info(f"✅ Notification envoyée à {winner['display_name']} ({winner['position']}e place)")
+                
+                # Petite pause entre les notifications
+                await asyncio.sleep(1)
+                
+            except Exception as notification_error:
+                logger.error(f"❌ Erreur notification {winner['display_name']}: {notification_error}")
+        
+        logger.info(f"🎉 Toutes les notifications de fin de mois envoyées !")
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur notification gagnants: {e}")
+
+async def check_monthly_reset():
+    """Vérifier si c'est le 1er du mois pour reset et notifier"""
+    now = datetime.now()
+    
+    # Vérifier si c'est le 1er du mois
+    if now.day == 1:
+        # Vérifier si le reset n'a pas déjà été fait aujourd'hui
+        reset_flag_file = f"/tmp/dino_reset_{now.strftime('%Y-%m')}.flag"
+        
+        if not os.path.exists(reset_flag_file):
+            logger.info("🔄 Début du processus de fin de mois...")
+            
+            # Notifier les gagnants du mois précédent
+            await notify_monthly_winners()
+            
+            # Reset du classement (automatique via month_year)
+            db.reset_monthly_leaderboard()
+            
+            # Créer le fichier flag pour éviter les doublons
+            with open(reset_flag_file, 'w') as f:
+                f.write(f"Reset effectué le {now.isoformat()}")
+            
+            logger.info("✅ Processus de fin de mois terminé")
+
+async def notify_new_score(telegram_id: int, score: int):
+    """Notifier l'utilisateur de son nouveau score"""
+    try:
+        bot = setup_telegram_bot()
+        if not bot:
+            return
+        
+        # Obtenir les informations du joueur
+        position_info = db.get_user_position_and_prize(telegram_id)
+        
+        text = f"🎯 **Nouveau score enregistré !**\n\n"
+        text += f"📊 **Score :** {score:,} points\n"
+        
+        if position_info['position']:
+            text += f"🏆 **Position :** {position_info['position']}/{position_info['total_players']}\n"
+            if position_info['prize'] > 0:
+                text += f"💰 **Gain potentiel :** {position_info['prize']:.2f} CHF\n"
+        
+        text += f"\n🎮 Continuez à jouer pour améliorer votre score !"
+        
+        await bot.send_message(
+            chat_id=telegram_id,
+            text=text,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur notification score: {e}")
+
+async def handle_message(bot, message):
+    """Gérer les messages texte (pour la configuration du profil)"""
     user = message.from_user
     text = message.text
     
-    # Vérifier si l'utilisateur a accès
-    has_access = db.check_user_access(user.id)
-    if not has_access:
-        await bot.send_message(
-            chat_id=message.chat_id,
-            text="❌ **Accès requis**\n\n" +
-                 "Vous devez payer votre participation (11 CHF) pour soumettre des scores.\n\n" +
-                 "Utilisez /payment pour participer au concours.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    # Extraire le score depuis la commande
-    try:
-        parts = text.split(' ', 1)
-        if len(parts) != 2:
-            raise ValueError("Format invalide")
+    # Gérer les états de configuration utilisateur
+    if hasattr(message.from_user, 'id') and message.from_user.id in user_states:
+        state = user_states[message.from_user.id]
         
-        score = int(parts[1].strip())
-        if score < 0:
-            raise ValueError("Score négatif")
+        if state == "edit_name":
+            # Mise à jour du nom d'affichage
+            new_name = text.strip()[:50]  # Limiter à 50 caractères
             
-    except ValueError:
-        await bot.send_message(
-            chat_id=message.chat_id,
-            text="❌ **Format invalide**\n\n" +
-                 "Utilisez: `/score VOTRE_SCORE`\n" +
-                 "Exemple: `/score 1234`\n\n" +
-                 "Le score doit être un nombre positif.",
-            parse_mode='Markdown'
-        )
-        return
+            success = db.update_display_name(message.from_user.id, new_name)
+            
+            if success:
+                await bot.send_message(
+                    chat_id=message.chat_id,
+                    text=f"✅ **Nom mis à jour !**\n\nVotre nouveau nom : **{new_name}**",
+                    parse_mode='Markdown'
+                )
+            else:
+                await bot.send_message(
+                    chat_id=message.chat_id,
+                    text="❌ Erreur lors de la mise à jour du nom.",
+                    parse_mode='Markdown'
+                )
+            
+            # Supprimer l'état
+            del user_states[message.from_user.id]
+            
+        elif state == "edit_paypal":
+            # Mise à jour de l'email PayPal
+            paypal_email = text.strip()
+            
+            # Validation basique de l'email
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, paypal_email):
+                await bot.send_message(
+                    chat_id=message.chat_id,
+                    text="❌ **Email invalide**\n\nVeuillez entrer une adresse email valide.",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            success = db.update_user_profile(message.from_user.id, paypal_email=paypal_email)
+            
+            if success:
+                await bot.send_message(
+                    chat_id=message.chat_id,
+                    text=f"✅ **Email PayPal mis à jour !**\n\nEmail : **{paypal_email}**\n\nVous pourrez recevoir vos gains automatiquement.",
+                    parse_mode='Markdown'
+                )
+            else:
+                await bot.send_message(
+                    chat_id=message.chat_id,
+                    text="❌ Erreur lors de la mise à jour de l'email PayPal.",
+                    parse_mode='Markdown'
+                )
+            
+            # Supprimer l'état
+            del user_states[message.from_user.id]
     
-    # Enregistrer le score
-    success = db.add_score(user.id, score)
-    
-    if success:
-        # Notifier avec calcul des gains
-        await notify_new_score(user.id, score)
-        
-        # Message de confirmation
-        position_info = db.get_user_position_and_prize(user.id)
-        
-        message_text = f"✅ **Score enregistré !**\n\n"
-        message_text += f"🎯 **Score :** {score:,} points\n"
-        
-        if position_info['position']:
-            message_text += f"🏆 **Position :** {position_info['position']}/{position_info['total_players']}\n"
-            if position_info['prize'] > 0:
-                message_text += f"💰 **Gain actuel :** {position_info['prize']:.2f} CHF\n"
-        
-        message_text += f"\n🎮 Continuez à jouer : {GAME_URL}\n"
-        message_text += f"🏆 Voir le classement : /leaderboard"
-        
-        await bot.send_message(
-            chat_id=message.chat_id,
-            text=message_text,
-            parse_mode='Markdown'
-        )
     else:
+        # Message générique pour les autres cas
         await bot.send_message(
             chat_id=message.chat_id,
-            text="❌ **Erreur**\n\n" +
-                 "Impossible d'enregistrer votre score. Réessayez plus tard.",
+            text="🤖 Utilisez /start pour voir le menu principal.",
             parse_mode='Markdown'
         )
 
@@ -2790,8 +3049,8 @@ async def run_telegram_bot():
                 BotCommand("payment", "💰 Participer au concours"),
                 BotCommand("leaderboard", "🏆 Classement mensuel"),
                 BotCommand("profile", "👤 Mon profil"),
-                BotCommand("score", "🎯 Soumettre un score"),
                 BotCommand("cancel_subscription", "❌ Annuler l'abonnement"),
+                BotCommand("support", "🆘 Support technique"),
                 BotCommand("help", "❓ Aide et règles"),
             ]
             
@@ -2827,6 +3086,9 @@ async def run_telegram_bot():
                         offset = update.update_id + 1
                         # Traiter l'update manuellement
                         await process_update_manually(bot, update)
+                    
+                    # Vérification du reset mensuel (une fois par jour)
+                    await check_monthly_reset()
                     
                     # Petite pause pour éviter la surcharge
                     if not updates:
