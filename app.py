@@ -1778,40 +1778,201 @@ user_states = {}
 
 async def handle_callback_query(bot, callback_query):
     """Gérer les callbacks des boutons"""
-    await callback_query.answer()
-    
-    data = callback_query.data
-    user = callback_query.from_user
-    chat_id = callback_query.message.chat_id
-    
-    if data == "profile":
-        await handle_profile_command(bot, callback_query.message)
-    
-    elif data == "leaderboard":
-        await handle_leaderboard_command(bot, callback_query.message)
-    
-    elif data == "payment":
-        await handle_payment_command(bot, callback_query.message)
-    
-    elif data == "setup_profile":
-        user_states[user.id] = "waiting_for_name"
-        await bot.send_message(
-            chat_id=chat_id,
-            text="👋 **Configuration de votre profil**\n\n" +
-                 "🏷️ **Choisissez votre nom d'affichage**\n" +
-                 "Ce nom apparaîtra dans le classement.\n\n" +
-                 "📝 Envoyez-moi le nom que vous voulez utiliser :",
-            parse_mode='Markdown'
-        )
-    
-    elif data == "change_name":
-        user_states[user.id] = "waiting_for_name"
-        await bot.send_message(
-            chat_id=chat_id,
-            text="✏️ **Changer votre nom d'affichage**\n\n" +
-                 "📝 Envoyez-moi votre nouveau nom :",
-            parse_mode='Markdown'
-        )
+    try:
+        await callback_query.answer()
+        
+        data = callback_query.data
+        user = callback_query.from_user
+        chat_id = callback_query.message.chat_id
+        
+        if data == "cancel_payment":
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=callback_query.message.message_id,
+                text="❌ **Paiement annulé.**",
+                parse_mode='Markdown'
+            )
+            return
+        
+        elif data.startswith("pay_once_"):
+            telegram_id = int(data.replace("pay_once_", ""))
+            payment_url = f"https://dinochallenge-bot.onrender.com/create-payment"
+            
+            text = f"💳 **Paiement Unique - 11 CHF**\n\n"
+            text += f"🔗 **Cliquez ici pour payer :**\n"
+            text += f"[💰 Payer avec PayPal]({payment_url}?telegram_id={telegram_id})\n\n"
+            text += f"📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
+            text += f"✅ Une fois payé, votre accès sera activé automatiquement !"
+            
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=callback_query.message.message_id,
+                text=text,
+                parse_mode='Markdown'
+            )
+        
+        elif data.startswith("pay_subscription_"):
+            telegram_id = int(data.replace("pay_subscription_", ""))
+            subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription"
+            
+            text = f"🔄 **Abonnement Mensuel - 11 CHF/mois**\n\n"
+            text += f"🔗 **Cliquez ici pour vous abonner :**\n"
+            text += f"[🔄 S'abonner avec PayPal]({subscription_url}?telegram_id={telegram_id})\n\n"
+            text += f"📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
+            text += f"✅ Accès permanent avec renouvellement automatique !\n"
+            text += f"❌ Annulable à tout moment avec /cancel_subscription"
+            
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=callback_query.message.message_id,
+                text=text,
+                parse_mode='Markdown'
+            )
+
+        elif data == "profile":
+            # Afficher le profil avec position et gains
+            db_user = db.get_user_profile(user.id)
+            has_access = db.check_user_access(user.id)
+            
+            # Obtenir la position et les gains de l'utilisateur
+            position_info = db.get_user_position_and_prize(user.id)
+            
+            display_name = db_user.get('display_name') or db_user.get('first_name') or user.first_name or 'Anonyme'
+            
+            text = f"👤 **PROFIL - {display_name}**\n\n"
+            text += f"🏷️ **Nom d'affichage:** {display_name}\n"
+            text += f"🆔 **ID Telegram:** {user.id}\n"
+            text += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')[:10] if db_user.get('registration_date') else 'Inconnue'}\n\n"
+            
+            if has_access:
+                text += f"✅ **Statut:** Accès actif ce mois\n\n"
+                
+                if position_info['position']:
+                    text += f"🏆 **CLASSEMENT ACTUEL:**\n"
+                    text += f"📍 Position : {position_info['position']}/{position_info['total_players']}\n"
+                    text += f"🎯 Meilleur score : {position_info['score']:,} pts\n"
+                    
+                    if position_info['prize'] > 0:
+                        text += f"💰 **Gain actuel : {position_info['prize']:.2f} CHF**\n\n"
+                        
+                        if position_info['position'] == 1:
+                            text += f"🥇 **Félicitations ! Vous êtes 1er !**\n"
+                        elif position_info['position'] == 2:
+                            text += f"🥈 **Excellent ! Vous êtes 2e !**\n"
+                        elif position_info['position'] == 3:
+                            text += f"🥉 **Bravo ! Vous êtes 3e !**\n"
+                    else:
+                        text += f"💡 **Pas encore dans le top 3**\n"
+                        text += f"🎯 Battez le 3e pour gagner {position_info['prize_info']['prizes']['third']:.2f} CHF !\n\n"
+                    
+                    # Afficher la cagnotte actuelle
+                    text += f"📊 **Cagnotte actuelle :**\n"
+                    text += f"• 🥇 1er : {position_info['prize_info']['prizes']['first']:.2f} CHF\n"
+                    text += f"• 🥈 2e : {position_info['prize_info']['prizes']['second']:.2f} CHF\n"
+                    text += f"• 🥉 3e : {position_info['prize_info']['prizes']['third']:.2f} CHF\n"
+                else:
+                    text += f"🎮 **Jouez pour être classé !**\n"
+            else:
+                text += f"❌ **Statut:** Pas d'accès ce mois\n\n"
+            
+            # Boutons
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [[InlineKeyboardButton("✏️ Changer mon nom", callback_data="change_name")]]
+            
+            if has_access:
+                keyboard.append([InlineKeyboardButton("🎮 Jouer", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition")])
+            else:
+                keyboard.append([InlineKeyboardButton("💰 Participer", callback_data="payment")])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=callback_query.message.message_id,
+                text=text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+
+        elif data == "leaderboard":
+            # Afficher le classement avec gains en temps réel
+            current_month = datetime.now().strftime('%Y-%m')
+            leaderboard = db.get_leaderboard(current_month, 10)
+            
+            if not leaderboard:
+                text = "🏆 Aucun score enregistré ce mois-ci."
+            else:
+                # Calculer les prix du mois
+                prize_info = db.calculate_monthly_prizes(current_month)
+                
+                text = f"🏆 **CLASSEMENT - {datetime.now().strftime('%B %Y')}**\n\n"
+                text += f"💰 **Cagnotte : {prize_info['total_amount']:.2f} CHF** ({prize_info['total_players']} joueurs)\n"
+                text += f"🥇 1er : {prize_info['prizes']['first']:.2f} CHF\n"
+                text += f"🥈 2e : {prize_info['prizes']['second']:.2f} CHF\n"
+                text += f"🥉 3e : {prize_info['prizes']['third']:.2f} CHF\n\n"
+                
+                medals = ['🥇', '🥈', '🥉'] + ['🏅'] * 7
+                
+                for i, player in enumerate(leaderboard):
+                    medal = medals[i] if i < len(medals) else '🏅'
+                    display_name = player['display_name']
+                    score = player['best_score']
+                    games = player['total_games']
+                    
+                    # Calculer le gain pour cette position
+                    if i == 0:
+                        prize = prize_info['prizes']['first']
+                    elif i == 1:
+                        prize = prize_info['prizes']['second']
+                    elif i == 2:
+                        prize = prize_info['prizes']['third']
+                    else:
+                        prize = 0
+                    
+                    text += f"{medal} **#{i+1} - {display_name}**\n"
+                    text += f"   📊 {score:,} pts ({games} parties)"
+                    
+                    if prize > 0:
+                        text += f" 💰 {prize:.2f} CHF"
+                    
+                    text += f"\n\n"
+                
+                text += f"🎮 Jouez ici : {GAME_URL}\n"
+                text += f"💡 Les gains sont automatiquement recalculés à chaque nouveau paiement !"
+            
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=callback_query.message.message_id,
+                text=text,
+                parse_mode='Markdown'
+            )
+
+        elif data == "payment":
+            await handle_payment_command(bot, callback_query.message)
+        
+        elif data == "setup_profile":
+            user_states[user.id] = "waiting_for_name"
+            await bot.send_message(
+                chat_id=chat_id,
+                text="👋 **Configuration de votre profil**\n\n" +
+                     "🏷️ **Choisissez votre nom d'affichage**\n" +
+                     "Ce nom apparaîtra dans le classement.\n\n" +
+                     "📝 Envoyez-moi le nom que vous voulez utiliser :",
+                parse_mode='Markdown'
+            )
+        
+        elif data == "change_name":
+            user_states[user.id] = "waiting_for_name"
+            await bot.send_message(
+                chat_id=chat_id,
+                text="✏️ **Changer votre nom d'affichage**\n\n" +
+                     "📝 Envoyez-moi votre nouveau nom :",
+                parse_mode='Markdown'
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur callback query: {e}")
+        await callback_query.answer("❌ Erreur lors du traitement")
 
 async def handle_start_command(bot, message):
     """Gérer la commande /start"""
@@ -2205,177 +2366,6 @@ async def handle_score_command(bot, message):
             parse_mode='Markdown'
         )
 
-async def handle_callback_query(bot, callback_query):
-    """Gérer les callbacks des boutons"""
-    try:
-        await bot.answer_callback_query(callback_query.id)
-        
-        data = callback_query.data
-        
-        if data == "cancel_payment":
-            await bot.edit_message_text(
-                chat_id=callback_query.message.chat_id,
-                message_id=callback_query.message.message_id,
-                text="❌ **Paiement annulé.**",
-                parse_mode='Markdown'
-            )
-            return
-        
-        if data.startswith("pay_once_"):
-            telegram_id = int(data.replace("pay_once_", ""))
-            payment_url = f"https://dinochallenge-bot.onrender.com/create-payment"
-            
-            text = f"💳 **Paiement Unique - 11 CHF**\n\n"
-            text += f"🔗 **Cliquez ici pour payer :**\n"
-            text += f"[💰 Payer avec PayPal]({payment_url}?telegram_id={telegram_id})\n\n"
-            text += f"📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
-            text += f"✅ Une fois payé, votre accès sera activé automatiquement !"
-            
-            await bot.edit_message_text(
-                chat_id=callback_query.message.chat_id,
-                message_id=callback_query.message.message_id,
-                text=text,
-                parse_mode='Markdown'
-            )
-        
-        elif data.startswith("pay_subscription_"):
-            telegram_id = int(data.replace("pay_subscription_", ""))
-            subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription"
-            
-            text = f"🔄 **Abonnement Mensuel - 11 CHF/mois**\n\n"
-            text += f"🔗 **Cliquez ici pour vous abonner :**\n"
-            text += f"[🔄 S'abonner avec PayPal]({subscription_url}?telegram_id={telegram_id})\n\n"
-            text += f"📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
-            text += f"✅ Accès permanent avec renouvellement automatique !\n"
-            text += f"❌ Annulable à tout moment avec /cancel_subscription"
-            
-            await bot.edit_message_text(
-                chat_id=callback_query.message.chat_id,
-                message_id=callback_query.message.message_id,
-                text=text,
-                parse_mode='Markdown'
-            )
-        
-        elif data == "leaderboard":
-            # Afficher le classement avec gains en temps réel
-            current_month = datetime.now().strftime('%Y-%m')
-            leaderboard = db.get_leaderboard(current_month, 10)
-            
-            if not leaderboard:
-                text = "🏆 Aucun score enregistré ce mois-ci."
-            else:
-                # Calculer les prix du mois
-                prize_info = db.calculate_monthly_prizes(current_month)
-                
-                text = f"🏆 **CLASSEMENT - {datetime.now().strftime('%B %Y')}**\n\n"
-                text += f"💰 **Cagnotte : {prize_info['total_amount']:.2f} CHF** ({prize_info['total_players']} joueurs)\n"
-                text += f"🥇 1er : {prize_info['prizes']['first']:.2f} CHF\n"
-                text += f"🥈 2e : {prize_info['prizes']['second']:.2f} CHF\n"
-                text += f"🥉 3e : {prize_info['prizes']['third']:.2f} CHF\n\n"
-                
-                medals = ['🥇', '🥈', '🥉'] + ['🏅'] * 7
-                
-                for i, player in enumerate(leaderboard):
-                    medal = medals[i] if i < len(medals) else '🏅'
-                    display_name = player['display_name']
-                    score = player['best_score']
-                    games = player['total_games']
-                    
-                    # Calculer le gain pour cette position
-                    if i == 0:
-                        prize = prize_info['prizes']['first']
-                    elif i == 1:
-                        prize = prize_info['prizes']['second']
-                    elif i == 2:
-                        prize = prize_info['prizes']['third']
-                    else:
-                        prize = 0
-                    
-                    text += f"{medal} **#{i+1} - {display_name}**\n"
-                    text += f"   📊 {score:,} pts ({games} parties)"
-                    
-                    if prize > 0:
-                        text += f" 💰 {prize:.2f} CHF"
-                    
-                    text += f"\n\n"
-                
-                text += f"🎮 Jouez ici : {GAME_URL}\n"
-                text += f"💡 Les gains sont automatiquement recalculés à chaque nouveau paiement !"
-            
-            await bot.edit_message_text(
-                chat_id=callback_query.message.chat_id,
-                message_id=callback_query.message.message_id,
-                text=text,
-                parse_mode='Markdown'
-            )
-        
-        elif data == "profile":
-            # Afficher le profil avec position et gains
-            user = callback_query.from_user
-            db_user = db.get_user_profile(user.id)
-            has_access = db.check_user_access(user.id)
-            
-            # Obtenir la position et les gains de l'utilisateur
-            position_info = db.get_user_position_and_prize(user.id)
-            
-            display_name = db_user.get('display_name') or db_user.get('first_name') or user.first_name or 'Anonyme'
-            
-            text = f"👤 **PROFIL - {display_name}**\n\n"
-            text += f"🏷️ **Nom d'affichage:** {display_name}\n"
-            text += f"🆔 **ID Telegram:** {user.id}\n"
-            text += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')[:10] if db_user.get('registration_date') else 'Inconnue'}\n\n"
-            
-            if has_access:
-                text += f"✅ **Statut:** Accès actif ce mois\n\n"
-                
-                if position_info['position']:
-                    text += f"🏆 **CLASSEMENT ACTUEL:**\n"
-                    text += f"📍 Position : {position_info['position']}/{position_info['total_players']}\n"
-                    text += f"🎯 Meilleur score : {position_info['score']:,} pts\n"
-                    
-                    if position_info['prize'] > 0:
-                        text += f"💰 **Gain actuel : {position_info['prize']:.2f} CHF**\n\n"
-                        
-                        if position_info['position'] == 1:
-                            text += f"🥇 **Félicitations ! Vous êtes 1er !**\n"
-                        elif position_info['position'] == 2:
-                            text += f"🥈 **Excellent ! Vous êtes 2e !**\n"
-                        elif position_info['position'] == 3:
-                            text += f"🥉 **Bravo ! Vous êtes 3e !**\n"
-                    else:
-                        text += f"💡 **Pas encore dans le top 3**\n"
-                        text += f"🎯 Battez le 3e pour gagner {position_info['prize_info']['prizes']['third']:.2f} CHF !\n\n"
-                    
-                    # Afficher la cagnotte actuelle
-                    text += f"📊 **Cagnotte actuelle :**\n"
-                    text += f"• 🥇 1er : {position_info['prize_info']['prizes']['first']:.2f} CHF\n"
-                    text += f"• 🥈 2e : {position_info['prize_info']['prizes']['second']:.2f} CHF\n"
-                    text += f"• 🥉 3e : {position_info['prize_info']['prizes']['third']:.2f} CHF\n"
-                else:
-                    text += f"🎮 **Jouez pour être classé !**\n"
-            else:
-                text += f"❌ **Statut:** Pas d'accès ce mois\n\n"
-            
-            # Boutons
-            keyboard = [[InlineKeyboardButton("✏️ Changer mon nom", callback_data="change_name")]]
-            
-            if has_access:
-                keyboard.append([InlineKeyboardButton("🎮 Jouer", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition")])
-            else:
-                keyboard.append([InlineKeyboardButton("💰 Participer", callback_data="payment")])
-            
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await bot.edit_message_text(
-                chat_id=callback_query.message.chat_id,
-                message_id=callback_query.message.message_id,
-                text=text,
-                parse_mode='Markdown',
-                reply_markup=reply_markup
-            )
-            
-    except Exception as e:
-        logger.error(f"❌ Erreur callback query: {e}")
 
 async def run_telegram_bot():
     """Exécuter le bot Telegram avec protection anti-conflit et verrouillage"""
