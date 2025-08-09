@@ -21,7 +21,7 @@ from typing import Optional, List, Dict
 import json
 
 # Imports pour le bot Telegram
-from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
 # Imports pour l'API web
@@ -1944,8 +1944,9 @@ async def process_update_manually(bot, update):
                 await handle_score_command(bot, update.message)
             # Gestion des boutons persistants (texte sans /)
             elif text in ["🎮 Jouer", "Jouer", "JOUER"]:
-                await handle_start_command(bot, update.message)
-            elif text in ["🏆 Classement", "Classement", "CLASSEMENT"]:
+                # Fonction de jeu spécifique (pas /start)
+                await handle_play_game(bot, update.message)
+            elif text in ["📊 Classement", "🏆 Classement", "Classement", "CLASSEMENT"]:
                 await handle_leaderboard_command(bot, update.message)
             elif text in ["👤 Profil", "Profil", "PROFIL"]:
                 await handle_profile_command(bot, update.message)
@@ -2173,6 +2174,147 @@ async def handle_callback_query(bot, callback_query):
         logger.error(f"❌ Erreur callback query: {e}")
         await callback_query.answer("❌ Erreur lors du traitement")
 
+async def handle_play_game(bot, message):
+    """Gérer le bouton Jouer (mode jeu spécifique)"""
+    user = message.from_user
+    
+    # Créer ou récupérer l'utilisateur
+    db_user = db.create_or_get_user(
+        telegram_id=user.id,
+        username=user.username,
+        first_name=user.first_name
+    )
+    
+    # Vérifier l'accès premium
+    has_access = db.check_user_access(user.id)
+    
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    if has_access:
+        # Utilisateur premium - accès direct au jeu
+        text = f"""🎮 **DINO CHALLENGE - MODE COMPÉTITION**
+
+👋 Salut {user.first_name} !
+
+✅ **Statut :** Premium activé
+🏆 **Mode :** Compétition (scores comptabilisés)
+
+🎯 **Votre mission :**
+• Évitez les obstacles en sautant
+• Réalisez le meilleur score possible
+• Montez dans le classement mensuel
+• Gagnez des prix en CHF !
+
+🚀 Cliquez sur le bouton ci-dessous pour jouer :"""
+
+        keyboard = [
+            [InlineKeyboardButton("🎮 JOUER MAINTENANT", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition")],
+            [
+                InlineKeyboardButton("🏆 Voir le classement", callback_data="leaderboard"),
+                InlineKeyboardButton("👤 Mon profil", callback_data="profile")
+            ]
+        ]
+    else:
+        # Utilisateur non-premium - proposition de paiement
+        text = f"""🎮 **DINO CHALLENGE**
+
+👋 Salut {user.first_name} !
+
+⚠️ **Accès requis pour le mode compétition**
+
+💰 **Participation mensuelle : 11 CHF**
+• Scores comptabilisés dans le classement
+• Éligibilité aux prix mensuels
+• Accès illimité tout le mois
+
+🆓 **En attendant :** Vous pouvez essayer le mode démo
+
+"""
+
+        keyboard = [
+            [InlineKeyboardButton("💳 PARTICIPER (11 CHF)", callback_data="payment")],
+            [InlineKeyboardButton("🆓 Mode démo (gratuit)", url=f"{GAME_URL}?mode=demo")],
+            [
+                InlineKeyboardButton("🏆 Voir le classement", callback_data="leaderboard"),
+                InlineKeyboardButton("❓ En savoir plus", callback_data="help")
+            ]
+        ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def handle_play_command(bot, message):
+    """Gérer la commande de jeu (bouton Jouer)"""
+    user = message.from_user
+    
+    # Créer ou récupérer l'utilisateur
+    db_user = db.create_or_get_user(
+        telegram_id=user.id,
+        username=user.username,
+        first_name=user.first_name
+    )
+    
+    # Vérifier l'accès
+    has_access = db.check_user_access(user.id)
+    
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    if has_access:
+        text = f"""🎮 **Prêt à jouer au Dino Challenge !**
+
+👋 Salut {user.first_name} !
+
+✅ Vous avez accès au mode compétition ce mois.
+
+🏆 **Objectif :** Faites le meilleur score possible !
+🎯 **Règles :** Évitez les obstacles, gagnez des points
+💰 **Prix :** Top 3 du mois remportent la cagnotte
+
+🚀 Cliquez sur le bouton ci-dessous pour jouer :"""
+
+        keyboard = [
+            [InlineKeyboardButton("🎮 JOUER EN MODE COMPÉTITION", url=f"{GAME_URL}?telegram_id={user.id}&mode=competition")],
+            [
+                InlineKeyboardButton("🏆 Voir le classement", callback_data="leaderboard"),
+                InlineKeyboardButton("👤 Mon profil", callback_data="profile")
+            ]
+        ]
+    else:
+        text = f"""🎮 **Rejoignez le Dino Challenge !**
+
+👋 Salut {user.first_name} !
+
+⚠️ Pour jouer en mode compétition et gagner des prix, vous devez d'abord participer au concours (11 CHF).
+
+🆓 **En attendant :** Vous pouvez essayer le jeu en mode démo
+💰 **Pour concourir :** Payez votre participation mensuelle
+
+"""
+
+        keyboard = [
+            [InlineKeyboardButton("💰 PARTICIPER (11 CHF)", callback_data="payment")],
+            [InlineKeyboardButton("🆓 Essayer en mode démo", url=f"{GAME_URL}?mode=demo")],
+            [
+                InlineKeyboardButton("🏆 Voir le classement", callback_data="leaderboard"),
+                InlineKeyboardButton("❓ Aide et règles", callback_data="help")
+            ]
+        ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
 async def handle_start_command(bot, message):
     """Gérer la commande /start"""
     user = message.from_user
@@ -2242,11 +2384,32 @@ async def handle_start_command(bot, message):
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    # Ajouter les boutons keyboard persistants (sous la barre d'écriture)
+    from telegram import ReplyKeyboardMarkup, KeyboardButton
+    
+    persistent_keyboard = [
+        [KeyboardButton("🎮 Jouer"), KeyboardButton("📊 Classement")],
+        [KeyboardButton("👤 Profil"), KeyboardButton("❓ Aide et règles")]
+    ]
+    
+    persistent_reply_markup = ReplyKeyboardMarkup(
+        persistent_keyboard, 
+        resize_keyboard=True, 
+        one_time_keyboard=False
+    )
+    
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
         parse_mode='Markdown',
         reply_markup=reply_markup
+    )
+    
+    # Envoyer un message séparé avec les boutons persistants
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text="🎯 **Menu rapide :**",
+        reply_markup=persistent_reply_markup
     )
 
 async def handle_payment_command(bot, message):
