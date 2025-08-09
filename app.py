@@ -1022,9 +1022,17 @@ def submit_score():
         result = db.add_score(telegram_id, score)
         
         if result['success']:
-            # Notifier le bot Telegram si possible
+            # Notifier le bot Telegram si possible (compatible Flask)
             if telegram_app:
-                asyncio.create_task(notify_new_score(telegram_id, score))
+                def run_score_notification():
+                    try:
+                        asyncio.run(notify_new_score(telegram_id, score))
+                    except Exception as notif_error:
+                        logger.error(f"❌ Erreur notification score: {notif_error}")
+                
+                notification_thread = threading.Thread(target=run_score_notification)
+                notification_thread.daemon = True
+                notification_thread.start()
             
             return jsonify({
                 'success': True,
@@ -1296,9 +1304,19 @@ def capture_payment():
                 )
                 
                 if success:
-                    # Notifier l'utilisateur
+                    # Notifier l'utilisateur en arrière-plan (compatible Flask)
                     if telegram_app:
-                        asyncio.create_task(notify_payment_success(telegram_id, amount, 'paiement'))
+                        # Utiliser threading pour exécuter la notification async dans Flask
+                        import threading
+                        def run_notification():
+                            try:
+                                asyncio.run(notify_payment_success(telegram_id, amount, 'paiement'))
+                            except Exception as notif_error:
+                                logger.error(f"❌ Erreur notification paiement: {notif_error}")
+                        
+                        notification_thread = threading.Thread(target=run_notification)
+                        notification_thread.daemon = True
+                        notification_thread.start()
                     
                     return jsonify({
                         'success': True,
@@ -1622,8 +1640,16 @@ def handle_payment_completed(webhook_data):
             )
             
             if success:
-                # Notifier l'utilisateur
-                asyncio.create_task(notify_payment_success(telegram_id, amount, 'paiement'))
+                # Notifier l'utilisateur (compatible Flask)
+                def run_payment_notification():
+                    try:
+                        asyncio.run(notify_payment_success(telegram_id, amount, 'paiement'))
+                    except Exception as notif_error:
+                        logger.error(f"❌ Erreur notification paiement webhook: {notif_error}")
+                
+                notification_thread = threading.Thread(target=run_payment_notification)
+                notification_thread.daemon = True
+                notification_thread.start()
                 logger.info(f"✅ Paiement unique traité: {telegram_id} = {amount} CHF")
         
     except Exception as e:
@@ -1665,8 +1691,16 @@ def handle_subscription_activated(webhook_data):
                     paypal_subscription_id=subscription_id
                 )
                 
-                # Notifier l'utilisateur
-                asyncio.create_task(notify_payment_success(telegram_id, MONTHLY_PRICE_CHF, 'abonnement'))
+                # Notifier l'utilisateur (compatible Flask)
+                def run_subscription_notification():
+                    try:
+                        asyncio.run(notify_payment_success(telegram_id, MONTHLY_PRICE_CHF, 'abonnement'))
+                    except Exception as notif_error:
+                        logger.error(f"❌ Erreur notification abonnement: {notif_error}")
+                
+                notification_thread = threading.Thread(target=run_subscription_notification)
+                notification_thread.daemon = True
+                notification_thread.start()
                 logger.info(f"✅ Abonnement activé: {telegram_id} = {subscription_id}")
         
     except Exception as e:
@@ -1706,8 +1740,16 @@ def handle_subscription_payment_completed(webhook_data):
             )
             
             if success:
-                # Notifier le renouvellement
-                asyncio.create_task(notify_subscription_renewal(telegram_id, amount))
+                # Notifier le renouvellement (compatible Flask)
+                def run_renewal_notification():
+                    try:
+                        asyncio.run(notify_subscription_renewal(telegram_id, amount))
+                    except Exception as notif_error:
+                        logger.error(f"❌ Erreur notification renouvellement: {notif_error}")
+                
+                notification_thread = threading.Thread(target=run_renewal_notification)
+                notification_thread.daemon = True
+                notification_thread.start()
                 logger.info(f"✅ Paiement abonnement traité: {telegram_id} = {amount} CHF")
         
     except Exception as e:
