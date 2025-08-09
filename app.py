@@ -1755,6 +1755,8 @@ async def process_update_manually(bot, update):
                 await handle_cancel_subscription_command(bot, update.message)
             elif text == '/help':
                 await handle_help_command(bot, update.message)
+            elif text.startswith('/score '):
+                await handle_score_command(bot, update.message)
             else:
                 # Message non reconnu
                 await bot.send_message(
@@ -2097,7 +2099,7 @@ async def handle_help_command(bot, message):
 2. Cliquez sur le lien du jeu
 3. Utilisez ESPACE ou FLÈCHE HAUT pour sauter
 4. Évitez les obstacles le plus longtemps possible
-5. Votre score est automatiquement enregistré
+5. Soumettez votre score avec `/score VOTRE_SCORE`
 
 💰 **Options de paiement :**
 • **Paiement unique :** Accès pour le mois en cours
@@ -2115,6 +2117,7 @@ Prix distribués au top 3 de chaque mois :
 /payment - Participer au concours
 /leaderboard - Classement mensuel
 /profile - Mon profil et statistiques
+/score NOMBRE - Soumettre un score (ex: /score 1234)
 /cancel_subscription - Annuler l'abonnement
 /help - Cette aide
 
@@ -2127,6 +2130,78 @@ Contactez l'organisateur pour toute question.
         text=text,
         parse_mode='Markdown'
     )
+
+async def handle_score_command(bot, message):
+    """Gérer la commande /score pour soumettre un score"""
+    user = message.from_user
+    text = message.text
+    
+    # Vérifier si l'utilisateur a accès
+    has_access = db.check_user_access(user.id)
+    if not has_access:
+        await bot.send_message(
+            chat_id=message.chat_id,
+            text="❌ **Accès requis**\n\n" +
+                 "Vous devez payer votre participation (11 CHF) pour soumettre des scores.\n\n" +
+                 "Utilisez /payment pour participer au concours.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Extraire le score depuis la commande
+    try:
+        parts = text.split(' ', 1)
+        if len(parts) != 2:
+            raise ValueError("Format invalide")
+        
+        score = int(parts[1].strip())
+        if score < 0:
+            raise ValueError("Score négatif")
+            
+    except ValueError:
+        await bot.send_message(
+            chat_id=message.chat_id,
+            text="❌ **Format invalide**\n\n" +
+                 "Utilisez: `/score VOTRE_SCORE`\n" +
+                 "Exemple: `/score 1234`\n\n" +
+                 "Le score doit être un nombre positif.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Enregistrer le score
+    success = db.add_score(user.id, score)
+    
+    if success:
+        # Notifier avec calcul des gains
+        await notify_new_score(user.id, score)
+        
+        # Message de confirmation
+        position_info = db.get_user_position_and_prize(user.id)
+        
+        message_text = f"✅ **Score enregistré !**\n\n"
+        message_text += f"🎯 **Score :** {score:,} points\n"
+        
+        if position_info['position']:
+            message_text += f"🏆 **Position :** {position_info['position']}/{position_info['total_players']}\n"
+            if position_info['prize'] > 0:
+                message_text += f"💰 **Gain actuel :** {position_info['prize']:.2f} CHF\n"
+        
+        message_text += f"\n🎮 Continuez à jouer : {GAME_URL}\n"
+        message_text += f"🏆 Voir le classement : /leaderboard"
+        
+        await bot.send_message(
+            chat_id=message.chat_id,
+            text=message_text,
+            parse_mode='Markdown'
+        )
+    else:
+        await bot.send_message(
+            chat_id=message.chat_id,
+            text="❌ **Erreur**\n\n" +
+                 "Impossible d'enregistrer votre score. Réessayez plus tard.",
+            parse_mode='Markdown'
+        )
 
 async def handle_callback_query(bot, callback_query):
     """Gérer les callbacks des boutons"""
@@ -2344,6 +2419,7 @@ async def run_telegram_bot():
                 BotCommand("payment", "💰 Participer au concours"),
                 BotCommand("leaderboard", "🏆 Classement mensuel"),
                 BotCommand("profile", "👤 Mon profil"),
+                BotCommand("score", "🎯 Soumettre un score"),
                 BotCommand("cancel_subscription", "❌ Annuler l'abonnement"),
                 BotCommand("help", "❓ Aide et règles"),
             ]
