@@ -1695,7 +1695,7 @@ def payment_success():
                 <div class="success">✅</div>
                 <h2>Paiement confirmé !</h2>
                 <p>Votre accès au Dino Challenge est maintenant activé !</p>
-                <a href="{GAME_URL}" class="btn">🎮 Jouer maintenant</a>
+                <a href="{GAME_URL}?telegram_id={telegram_id}&mode=competition" class="btn">🎮 Jouer maintenant en mode classé</a>
                 <p><small>Vous pouvez fermer cette page</small></p>
             </div>
             
@@ -1729,7 +1729,7 @@ def payment_success():
                         
                         // Rediriger vers le jeu après 3 secondes
                         setTimeout(() => {{
-                            window.location.href = '{GAME_URL}?telegram_id={telegram_id}&payment=success';
+                            window.location.href = '{GAME_URL}?telegram_id={telegram_id}&mode=competition&payment=success';
                         }}, 3000);
                     }} else {{
                         throw new Error(data.error || 'Erreur inconnue');
