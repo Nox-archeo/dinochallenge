@@ -2770,7 +2770,7 @@ async function checkGameAccess() {
     }
     
     try {
-        const apiUrl = `https://dinochallenge-bot.onrender.com/api/check-access?telegram_id=${gameState.telegram_id}&mode=${gameState.mode}`;
+        const apiUrl = `https://dinochallenge-bot.onrender.com/api/check_access?telegram_id=${gameState.telegram_id}&mode=${gameState.mode}`;
         console.log('🔍 Appel API:', apiUrl);
         
         const response = await fetch(apiUrl);
@@ -2779,10 +2779,22 @@ async function checkGameAccess() {
         console.log('📡 Réponse API:', response.status, data);
         
         if (response.ok) {
-            return data;
+            // Adapter la nouvelle structure de réponse
+            return {
+                access_granted: data.can_play,
+                unlimited: data.mode === 'demo',
+                limit_reached: data.limit_reached || false,
+                remaining_games: data.remaining_games,
+                daily_games: data.daily_games,
+                error: data.error,
+                message: data.message
+            };
         } else {
             console.error('❌ Erreur vérification accès:', data.error);
-            return { access_granted: false, error: data.error };
+            return { 
+                access_granted: false, 
+                error: data.error || data.message || 'Erreur serveur'
+            };
         }
     } catch (error) {
         console.error('❌ Erreur réseau lors de la vérification d\'accès:', error);
