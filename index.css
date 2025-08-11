@@ -163,3 +163,145 @@ html, body {
   transition: transform 250ms cubic-bezier(0.4, 0, 1, 1) 400ms;
   z-index: 2;
 }
+
+/* Menu Hamburger Styles */
+.hamburger-menu {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.hamburger-toggle {
+  background: #535353;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 50px;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  width: 50px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.hamburger-toggle:hover {
+  background: #6e6e6e;
+  transform: scale(1.05);
+}
+
+.hamburger-toggle span {
+  background: white;
+  border-radius: 2px;
+  height: 3px;
+  transition: all 0.3s ease;
+  width: 25px;
+}
+
+.hamburger-toggle.active span:nth-child(1) {
+  transform: rotate(45deg) translate(6px, 6px);
+}
+
+.hamburger-toggle.active span:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger-toggle.active span:nth-child(3) {
+  transform: rotate(-45deg) translate(6px, -6px);
+}
+
+/* Sidebar Menu */
+.sidebar-menu {
+  position: fixed;
+  top: 0;
+  right: -300px;
+  width: 280px;
+  height: 100vh;
+  background: #f5f5f5;
+  box-shadow: -2px 0 10px rgba(0,0,0,0.3);
+  transition: right 0.3s ease;
+  z-index: 999;
+  font-family: 'Open Sans', sans-serif;
+}
+
+.sidebar-menu.open {
+  right: 0;
+}
+
+.sidebar-content {
+  padding: 80px 20px 20px;
+}
+
+.sidebar-content h3 {
+  color: #535353;
+  font-size: 24px;
+  margin: 0 0 30px 0;
+  text-align: center;
+}
+
+.menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu-list li {
+  margin-bottom: 15px;
+}
+
+.menu-list li a {
+  color: #535353;
+  text-decoration: none;
+  display: block;
+  padding: 15px 20px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  font-size: 16px;
+  border: 2px solid transparent;
+}
+
+.menu-list li a:hover {
+  background: #e0e0e0;
+  border-color: #535353;
+  transform: translateX(5px);
+}
+
+.menu-divider {
+  border-top: 1px solid #d0d0d0;
+  margin: 20px 0;
+  padding: 0;
+}
+
+.menu-divider + li a {
+  background: #e8f4fd;
+  border-color: #2196f3;
+  color: #1976d2;
+}
+
+.menu-divider + li a:hover {
+  background: #bbdefb;
+  border-color: #1976d2;
+}
+
+/* Menu Overlay */
+.menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.5);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  z-index: 998;
+}
+
+.menu-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}

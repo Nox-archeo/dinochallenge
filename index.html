@@ -29,6 +29,32 @@
             </template>
         </div>
     </div>
+
+    <!-- Menu Hamburger -->
+    <div id="hamburger-menu" class="hamburger-menu">
+        <button id="hamburger-toggle" class="hamburger-toggle">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+    </div>
+
+    <!-- Sidebar Menu -->
+    <div id="sidebar-menu" class="sidebar-menu">
+        <div class="sidebar-content">
+            <h3>Menu</h3>
+            <ul class="menu-list">
+                <li><a href="javascript:void(0)" onclick="toggleSound()">🔊 Son</a></li>
+                <li><a href="javascript:void(0)" onclick="resetGame()">🔄 Redémarrer</a></li>
+                <li><a href="javascript:void(0)" onclick="showHelp()">❓ Aide</a></li>
+                <li class="menu-divider"></li>
+                <li><a href="?mode=demo" onclick="goToDemo()">🎮 Mode Démo</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Overlay pour fermer le menu -->
+    <div id="menu-overlay" class="menu-overlay"></div>
 </body>
 
 <script>
@@ -39,6 +65,82 @@
         box.style.visibility="hidden";
     }
 };
+
+// Menu Hamburger JavaScript
+document.addEventListener('DOMContentLoaded', function() {
+    const hamburgerToggle = document.getElementById('hamburger-toggle');
+    const sidebarMenu = document.getElementById('sidebar-menu');
+    const menuOverlay = document.getElementById('menu-overlay');
+
+    function openMenu() {
+        hamburgerToggle.classList.add('active');
+        sidebarMenu.classList.add('open');
+        menuOverlay.classList.add('active');
+    }
+
+    function closeMenu() {
+        hamburgerToggle.classList.remove('active');
+        sidebarMenu.classList.remove('open');
+        menuOverlay.classList.remove('active');
+    }
+
+    // Toggle menu
+    hamburgerToggle.addEventListener('click', function() {
+        if (sidebarMenu.classList.contains('open')) {
+            closeMenu();
+        } else {
+            openMenu();
+        }
+    });
+
+    // Close menu when clicking overlay
+    menuOverlay.addEventListener('click', closeMenu);
+
+    // Close menu when pressing Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && sidebarMenu.classList.contains('open')) {
+            closeMenu();
+        }
+    });
+});
+
+// Fonctions du menu
+function toggleSound() {
+    // Fonction pour toggle le son (à implémenter)
+    console.log('Toggle sound');
+    // Fermer le menu après action
+    document.getElementById('sidebar-menu').classList.remove('open');
+    document.getElementById('menu-overlay').classList.remove('active');
+    document.getElementById('hamburger-toggle').classList.remove('active');
+}
+
+function resetGame() {
+    // Redémarrer le jeu
+    if (typeof Runner !== 'undefined' && Runner.instance_) {
+        Runner.instance_.restart();
+    }
+    // Fermer le menu
+    document.getElementById('sidebar-menu').classList.remove('open');
+    document.getElementById('menu-overlay').classList.remove('active');
+    document.getElementById('hamburger-toggle').classList.remove('active');
+}
+
+function showHelp() {
+    alert('🎮 DINO CHALLENGE\n\n' +
+          '• Appuyez sur ESPACE pour sauter\n' +
+          '• Évitez les obstacles\n' +
+          '• Mode Compétition : vos scores comptent\n' +
+          '• Mode Démo : entraînement gratuit');
+    // Fermer le menu
+    document.getElementById('sidebar-menu').classList.remove('open');
+    document.getElementById('menu-overlay').classList.remove('active');
+    document.getElementById('hamburger-toggle').classList.remove('active');
+}
+
+function goToDemo() {
+    // Rediriger vers le mode démo
+    window.location.href = window.location.origin + window.location.pathname + '?mode=demo';
+}
 </script>
     
 </html>

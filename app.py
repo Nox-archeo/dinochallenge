@@ -2988,7 +2988,7 @@ async def handle_leaderboard_command(bot, message):
             
             text += f"\n\n"
         
-        text += f"🎮 Jouez ici : {GAME_URL}\n"
+        text += f"🎮 Jouez ici : {GAME_URL}?mode=competition\n"
         text += f"💡 Les gains sont automatiquement recalculés à chaque nouveau paiement !"
         
         await bot.send_message(
