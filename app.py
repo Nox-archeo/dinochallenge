@@ -1310,8 +1310,9 @@ def get_leaderboard():
         logger.error(f"❌ Erreur récupération classement: {e}")
         return jsonify({'error': str(e)}), 500
 
-@flask_app.route('/api/check-access', methods=['GET'])
-def check_game_access():
+# Cette fonction dupliquée a été supprimée - utiliser /api/check_access à la place
+# @flask_app.route('/api/check-access', methods=['GET'])  # SUPPRIMÉ
+def check_game_access_old_duplicate():  # RENOMMÉ POUR ÉVITER CONFLIT
     """Vérifier l'accès au jeu et les parties restantes"""
     try:
         telegram_id = request.args.get('telegram_id')
