@@ -486,7 +486,7 @@ class DatabaseManager:
                         LIMIT %s
                     """, (month_year, month_year, limit))
                 else:
-                    # Requête SQLite simplifiée et corrigée
+                    # Requête SQLite avec même filtre d'accès que PostgreSQL
                     cursor.execute("""
                         SELECT 
                             s.telegram_id,
@@ -498,10 +498,22 @@ class DatabaseManager:
                         FROM scores s
                         LEFT JOIN users u ON s.telegram_id = u.telegram_id
                         WHERE s.month_year = ?
+                          AND (u.has_paid_current_month = 1 
+                               OR EXISTS (
+                                   SELECT 1 FROM payments p 
+                                   WHERE p.telegram_id = s.telegram_id 
+                                     AND p.month_year = ? 
+                                     AND p.status = 'completed'
+                               )
+                               OR EXISTS (
+                                   SELECT 1 FROM subscriptions sub 
+                                   WHERE sub.telegram_id = s.telegram_id 
+                                     AND sub.status = 'active'
+                               ))
                         GROUP BY s.telegram_id, u.display_name, u.first_name, u.username, u.has_paid_current_month
                         ORDER BY best_score DESC
                         LIMIT ?
-                    """, (month_year, limit))
+                    """, (month_year, month_year, limit))
                 
                 results = cursor.fetchall()
                 
@@ -1133,6 +1145,36 @@ def submit_score():
         logger.error(f"❌ Erreur soumission score: {e}")
         return jsonify({'error': str(e)}), 500
 
+@flask_app.route('/reset-leaderboard', methods=['DELETE'])
+def reset_leaderboard():
+    """Reset complet du classement - ATTENTION: efface tous les scores"""
+    try:
+        data = request.get_json()
+        if not data or data.get('confirm') != True:
+            return jsonify({'error': 'Confirmation requise: {"confirm": true}'}), 400
+        
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Supprimer tous les scores
+            cursor.execute("DELETE FROM scores")
+            
+            if db.is_postgres:
+                # Reset de la séquence PostgreSQL
+                cursor.execute("ALTER SEQUENCE scores_id_seq RESTART WITH 1")
+            
+            conn.commit()
+            
+        logger.info("🗑️ RESET CLASSEMENT: Tous les scores supprimés")
+        return jsonify({
+            'success': True,
+            'message': 'Classement remis à zéro - tous les scores supprimés'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur reset classement: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @flask_app.route('/api/leaderboard', methods=['GET'])
 def get_leaderboard():
     """Récupérer le classement actuel"""
@@ -1183,6 +1225,53 @@ def check_game_access():
         # En mode compétition, vérifier l'accès premium
         has_premium = db.check_user_access(telegram_id)
         logger.info(f"🔍 Résultat vérification premium pour {telegram_id}: {has_premium}")
+        
+        # Debug: vérifier aussi la base de données directement
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Vérifier l'utilisateur
+            cursor.execute("""
+                SELECT telegram_id, has_paid_current_month, first_name, username FROM users 
+                WHERE telegram_id = %s
+            """ if db.is_postgres else """
+                SELECT telegram_id, has_paid_current_month, first_name, username FROM users 
+                WHERE telegram_id = ?
+            """, (telegram_id,))
+            
+            user_result = cursor.fetchone()
+            if user_result:
+                if db.is_postgres:
+                    user_data = dict(user_result)
+                else:
+                    user_data = {
+                        'telegram_id': user_result[0],
+                        'has_paid_current_month': user_result[1], 
+                        'first_name': user_result[2],
+                        'username': user_result[3]
+                    }
+                logger.info(f"👤 Utilisateur trouvé: {user_data}")
+            else:
+                logger.warning(f"👤 Utilisateur {telegram_id} non trouvé dans la base")
+            
+            # Vérifier les paiements
+            cursor.execute("""
+                SELECT COUNT(*) FROM payments 
+                WHERE telegram_id = %s AND month_year = %s AND status = 'completed'
+            """ if db.is_postgres else """
+                SELECT COUNT(*) FROM payments 
+                WHERE telegram_id = ? AND month_year = ? AND status = 'completed'
+            """, (telegram_id, datetime.now().strftime('%Y-%m')))
+            
+            payment_result = cursor.fetchone()
+            payment_count = 0
+            if payment_result:
+                if db.is_postgres:
+                    payment_count = payment_result['count'] or 0
+                else:
+                    payment_count = payment_result[0] if payment_result[0] is not None else 0
+            
+            logger.info(f"💳 Paiements trouvés pour {telegram_id}: {payment_count}")
         
         if not has_premium:
             logger.warning(f"❌ Accès refusé pour {telegram_id} - pas de premium")
@@ -3693,6 +3782,31 @@ def debug_user_status(telegram_id):
             
     except Exception as e:
         logger.error(f"❌ Erreur debug user status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@flask_app.route('/admin/reset-test-data', methods=['POST'])
+def reset_test_data():
+    """Supprimer les données de test du classement"""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Supprimer le score de test 123456789 = 2500 pts
+            cursor.execute("DELETE FROM scores WHERE telegram_id = ?", (123456789,))
+            
+            # Supprimer l'utilisateur de test
+            cursor.execute("DELETE FROM users WHERE telegram_id = ?", (123456789,))
+            
+            conn.commit()
+            
+        logger.info("🧹 Données de test supprimées (utilisateur 123456789)")
+        return jsonify({
+            'success': True,
+            'message': 'Données de test supprimées avec succès'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur suppression données test: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

@@ -2903,11 +2903,13 @@ async function checkUserAccess() {
     }
 
     try {
-        const response = await fetch(`/admin/check-access/${gameState.telegram_id}`);
+        const response = await fetch(`/api/check-access?telegram_id=${gameState.telegram_id}&mode=${gameState.mode}`);
         const data = await response.json();
         
-        gameState.hasAccess = data.has_access;
-        return data.has_access;
+        console.log('🔍 Vérification accès utilisateur:', data);
+        
+        gameState.hasAccess = data.access_granted;
+        return data.access_granted;
     } catch (error) {
         console.error('❌ Erreur vérification accès:', error);
         return false;
