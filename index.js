@@ -2770,8 +2770,13 @@ async function checkGameAccess() {
     }
     
     try {
-        const response = await fetch(`/api/check-access?telegram_id=${gameState.telegram_id}&mode=${gameState.mode}`);
+        const apiUrl = `https://dinochallenge-bot.onrender.com/api/check-access?telegram_id=${gameState.telegram_id}&mode=${gameState.mode}`;
+        console.log('🔍 Appel API:', apiUrl);
+        
+        const response = await fetch(apiUrl);
         const data = await response.json();
+        
+        console.log('📡 Réponse API:', response.status, data);
         
         if (response.ok) {
             return data;
@@ -2811,7 +2816,10 @@ async function submitScore(score) {
             first_name: gameState.first_name
         });
 
-        const response = await fetch('/api/score', {
+        const apiUrl = 'https://dinochallenge-bot.onrender.com/api/score';
+        console.log('📡 Envoi vers:', apiUrl);
+
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2903,7 +2911,8 @@ async function checkUserAccess() {
     }
 
     try {
-        const response = await fetch(`/api/check-access?telegram_id=${gameState.telegram_id}&mode=${gameState.mode}`);
+        const apiUrl = `https://dinochallenge-bot.onrender.com/api/check-access?telegram_id=${gameState.telegram_id}&mode=${gameState.mode}`;
+        const response = await fetch(apiUrl);
         const data = await response.json();
         
         console.log('🔍 Vérification accès utilisateur:', data);
