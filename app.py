@@ -368,19 +368,27 @@ class DatabaseManager:
                 return {'success': False, 'error': 'Accès premium requis'}
 
             # VÉRIFIER LA LIMITE AVANT d'ajouter le score
-            today = datetime.now().date()
+            # Utiliser l'heure française (UTC+2 en été, UTC+1 en hiver)
+            from datetime import timezone, timedelta
+            
+            # Approximation : UTC+2 pour l'été français (à ajuster selon la saison)
+            france_tz = timezone(timedelta(hours=2))
+            today_france = datetime.now(france_tz).date()
+            
+            print(f"🕐 Heure serveur UTC: {datetime.now()}")
+            print(f"🇫🇷 Date française: {today_france}")
             
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Compter les parties d'aujourd'hui AVANT d'ajouter le nouveau score
+                # Compter les parties d'aujourd'hui en France AVANT d'ajouter le nouveau score
                 cursor.execute("""
                     SELECT COUNT(*) FROM scores 
-                    WHERE telegram_id = %s AND DATE(created_at) = %s
+                    WHERE telegram_id = %s AND DATE(created_at AT TIME ZONE 'Europe/Paris') = %s
                 """ if self.is_postgres else """
                     SELECT COUNT(*) FROM scores 
-                    WHERE telegram_id = ? AND DATE(created_at) = ?
-                """, (telegram_id, today))
+                    WHERE telegram_id = ? AND DATE(created_at, '+2 hours') = ?
+                """, (telegram_id, today_france))
                 
                 result = cursor.fetchone()
                 if result:
@@ -1132,18 +1140,22 @@ def check_game_access():
             })
         
         # Vérifier la limite quotidienne
-        today = datetime.now().date()
+        # Utiliser l'heure française (UTC+2 en été, UTC+1 en hiver)
+        from datetime import timezone, timedelta
+        
+        france_tz = timezone(timedelta(hours=2))
+        today_france = datetime.now(france_tz).date()
         
         with db.get_connection() as conn:
             cursor = conn.cursor()
             
             cursor.execute("""
                 SELECT COUNT(*) FROM scores 
-                WHERE telegram_id = %s AND DATE(created_at) = %s
+                WHERE telegram_id = %s AND DATE(created_at AT TIME ZONE 'Europe/Paris') = %s
             """ if db.is_postgres else """
                 SELECT COUNT(*) FROM scores 
-                WHERE telegram_id = ? AND DATE(created_at) = ?
-            """, (telegram_id, today))
+                WHERE telegram_id = ? AND DATE(created_at, '+2 hours') = ?
+            """, (telegram_id, today_france))
             
             result = cursor.fetchone()
             if result:
@@ -1383,18 +1395,22 @@ def check_game_access():
             })
         
         # Vérifier les parties restantes aujourd'hui
-        today = datetime.now().date()
+        # Utiliser l'heure française (UTC+2 en été, UTC+1 en hiver)
+        from datetime import timezone, timedelta
+        
+        france_tz = timezone(timedelta(hours=2))
+        today_france = datetime.now(france_tz).date()
         
         with db.get_connection() as conn:
             cursor = conn.cursor()
             
             cursor.execute("""
                 SELECT COUNT(*) FROM scores 
-                WHERE telegram_id = %s AND DATE(created_at) = %s
+                WHERE telegram_id = %s AND DATE(created_at AT TIME ZONE 'Europe/Paris') = %s
             """ if db.is_postgres else """
                 SELECT COUNT(*) FROM scores 
-                WHERE telegram_id = ? AND DATE(created_at) = ?
-            """, (telegram_id, today))
+                WHERE telegram_id = ? AND DATE(created_at, '+2 hours') = ?
+            """, (telegram_id, today_france))
             
             result = cursor.fetchone()
             if result:
