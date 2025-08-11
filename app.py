@@ -3833,6 +3833,38 @@ def reset_test_data():
         logger.error(f"❌ Erreur suppression données test: {e}")
         return jsonify({'error': str(e)}), 500
 
+@flask_app.route('/admin/reset-user-data', methods=['POST'])
+def reset_user_data():
+    """Supprimer les données d'un utilisateur spécifique pour test"""
+    try:
+        data = request.get_json()
+        telegram_id = data.get('telegram_id')
+        
+        if not telegram_id:
+            return jsonify({'error': 'telegram_id requis'}), 400
+            
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Supprimer les scores de l'utilisateur
+            cursor.execute("""
+                DELETE FROM scores WHERE telegram_id = %s
+            """ if db.is_postgres else """
+                DELETE FROM scores WHERE telegram_id = ?
+            """, (telegram_id,))
+            
+            conn.commit()
+            
+        logger.info(f"🧹 Scores supprimés pour utilisateur {telegram_id}")
+        return jsonify({
+            'success': True,
+            'message': f'Scores supprimés pour utilisateur {telegram_id}'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur suppression scores utilisateur: {e}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     main()
 
