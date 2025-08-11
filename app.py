@@ -3757,15 +3757,31 @@ def debug_user_status(telegram_id):
             cursor = conn.cursor()
             
             # Récupérer utilisateur
-            cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+            cursor.execute("""
+                SELECT * FROM users WHERE telegram_id = %s
+            """ if db.is_postgres else """
+                SELECT * FROM users WHERE telegram_id = ?
+            """, (telegram_id,))
             user = cursor.fetchone()
             
             # Récupérer scores
-            cursor.execute("SELECT score, created_at, month_year FROM scores WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 10", (telegram_id,))
+            cursor.execute("""
+                SELECT score, created_at, month_year FROM scores 
+                WHERE telegram_id = %s ORDER BY created_at DESC LIMIT 10
+            """ if db.is_postgres else """
+                SELECT score, created_at, month_year FROM scores 
+                WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 10
+            """, (telegram_id,))
             scores = cursor.fetchall()
             
             # Récupérer paiements  
-            cursor.execute("SELECT amount, status, payment_date, month_year FROM payments WHERE telegram_id = ? ORDER BY payment_date DESC LIMIT 10", (telegram_id,))
+            cursor.execute("""
+                SELECT amount, status, payment_date, month_year FROM payments 
+                WHERE telegram_id = %s ORDER BY payment_date DESC LIMIT 10
+            """ if db.is_postgres else """
+                SELECT amount, status, payment_date, month_year FROM payments 
+                WHERE telegram_id = ? ORDER BY payment_date DESC LIMIT 10
+            """, (telegram_id,))
             payments = cursor.fetchall()
             
             # Vérifier accès
@@ -3792,10 +3808,18 @@ def reset_test_data():
             cursor = conn.cursor()
             
             # Supprimer le score de test 123456789 = 2500 pts
-            cursor.execute("DELETE FROM scores WHERE telegram_id = ?", (123456789,))
+            cursor.execute("""
+                DELETE FROM scores WHERE telegram_id = %s
+            """ if db.is_postgres else """
+                DELETE FROM scores WHERE telegram_id = ?
+            """, (123456789,))
             
             # Supprimer l'utilisateur de test
-            cursor.execute("DELETE FROM users WHERE telegram_id = ?", (123456789,))
+            cursor.execute("""
+                DELETE FROM users WHERE telegram_id = %s
+            """ if db.is_postgres else """
+                DELETE FROM users WHERE telegram_id = ?
+            """, (123456789,))
             
             conn.commit()
             
