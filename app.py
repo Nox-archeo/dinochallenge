@@ -2411,6 +2411,8 @@ async def process_update_manually(bot, update):
                 await handle_help_command(bot, update.message)
             elif text == '/support':
                 await handle_support_command(bot, update.message)
+            elif text == '/demo':
+                await handle_demo_command(bot, update.message)
             # Gestion des boutons persistants (texte sans /)
             elif text in ["🎮 Jouer", "Jouer", "JOUER"]:
                 # Fonction de jeu spécifique (pas /start)
@@ -3223,6 +3225,56 @@ Les gains sont calculés sur la cagnotte totale :
         reply_markup=reply_markup
     )
 
+async def handle_demo_command(bot, message):
+    """Gérer la commande /demo"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    text = """🎮 **MODE DÉMO - DINO CHALLENGE**
+
+🆓 **Jouez gratuitement au Chrome Dino Runner !**
+
+🎯 **Mode Démo :**
+• Accès gratuit et illimité
+• Entraînez-vous autant que vous voulez
+• Familiarisez-vous avec les commandes
+• Aucun score n'est comptabilisé dans le concours
+
+🏆 **Pour participer au concours :**
+• Utilisez /payment pour débloquer le mode compétition
+• Vos scores seront alors comptabilisés automatiquement
+• Maximum 5 parties par jour en mode compétition
+• Prix mensuels garantis !
+
+🎮 **Commandes du jeu :**
+• **ESPACE** ou **FLÈCHE HAUT** : Sauter
+• **FLÈCHE BAS** : S'accroupir (éviter les oiseaux)
+
+🚀 **Prêt à jouer en démo ?**
+Cliquez sur le bouton ci-dessous pour commencer !"""
+
+    keyboard = [
+        [
+            InlineKeyboardButton("🎮 JOUER EN MODE DÉMO", url=f"{GAME_URL}?mode=demo")
+        ],
+        [
+            InlineKeyboardButton("💰 Débloquer Mode Compétition", callback_data="payment"),
+            InlineKeyboardButton("🏆 Voir le Classement", callback_data="leaderboard")
+        ],
+        [
+            InlineKeyboardButton("❓ Aide & Règles", callback_data="help"),
+            InlineKeyboardButton("🏠 Menu Principal", callback_data="start")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
 async def handle_support_command(bot, message):
     """Gérer la commande /support"""
     user = message.from_user
@@ -3521,6 +3573,7 @@ async def run_telegram_bot():
                 BotCommand("cancel_subscription", "❌ Annuler l'abonnement"),
                 BotCommand("support", "🆘 Support technique"),
                 BotCommand("help", "❓ Aide et règles"),
+                BotCommand("demo", "🎮 Mode Démo"),
             ]
             
             await bot.set_my_commands(commands)
