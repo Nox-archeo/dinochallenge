@@ -486,32 +486,22 @@ class DatabaseManager:
                         LIMIT %s
                     """, (month_year, month_year, limit))
                 else:
-                    # Requête SQLite corrigée pour éviter les problèmes de GROUP BY
+                    # Requête SQLite simplifiée et corrigée
                     cursor.execute("""
                         SELECT 
-                            u.telegram_id,
-                            COALESCE(u.display_name, u.first_name, u.username, 'Anonyme') as display_name,
+                            s.telegram_id,
+                            COALESCE(u.display_name, u.first_name, u.username, 'Joueur ' || s.telegram_id) as display_name,
                             u.username,
-                            (SELECT MAX(score) FROM scores s2 WHERE s2.telegram_id = u.telegram_id AND s2.month_year = ?) as best_score,
-                            (SELECT COUNT(*) FROM scores s3 WHERE s3.telegram_id = u.telegram_id AND s3.month_year = ?) as total_games,
-                            u.has_paid_current_month
-                        FROM users u
-                        WHERE EXISTS (SELECT 1 FROM scores s WHERE s.telegram_id = u.telegram_id AND s.month_year = ?)
-                          AND (u.has_paid_current_month = 1 
-                               OR EXISTS (
-                                   SELECT 1 FROM payments p 
-                                   WHERE p.telegram_id = u.telegram_id 
-                                     AND p.month_year = ? 
-                                     AND p.status = 'completed'
-                               )
-                               OR EXISTS (
-                                   SELECT 1 FROM subscriptions sub 
-                                   WHERE sub.telegram_id = u.telegram_id 
-                                     AND sub.status = 'active'
-                               ))
+                            MAX(s.score) as best_score,
+                            COUNT(s.id) as total_games,
+                            COALESCE(u.has_paid_current_month, 0) as has_paid_current_month
+                        FROM scores s
+                        LEFT JOIN users u ON s.telegram_id = u.telegram_id
+                        WHERE s.month_year = ?
+                        GROUP BY s.telegram_id, u.display_name, u.first_name, u.username, u.has_paid_current_month
                         ORDER BY best_score DESC
                         LIMIT ?
-                    """, (month_year, month_year, month_year, month_year, limit))
+                    """, (month_year, limit))
                 
                 results = cursor.fetchall()
                 
@@ -1083,7 +1073,10 @@ def submit_score():
     try:
         data = request.get_json()
         
+        logger.info(f"📥 Réception score: {data}")
+        
         if not data:
+            logger.error("❌ Aucune donnée reçue")
             return jsonify({'error': 'Aucune donnée reçue'}), 400
         
         telegram_id = data.get('telegram_id') or data.get('user_id')
@@ -1091,19 +1084,26 @@ def submit_score():
         username = data.get('username')
         first_name = data.get('first_name')
         
+        logger.info(f"📊 Données parsées: telegram_id={telegram_id}, score={score}, username={username}")
+        
         if not telegram_id or score is None:
+            logger.error(f"❌ Données manquantes: telegram_id={telegram_id}, score={score}")
             return jsonify({'error': 'telegram_id et score requis'}), 400
         
         # Convertir en entiers
         telegram_id = int(telegram_id)
         score = int(score)
         
+        logger.info(f"🎯 Soumission score: {telegram_id} = {score} pts")
+        
         # Validation du score
         if score < 0:
+            logger.error(f"❌ Score invalide: {score}")
             return jsonify({'error': 'Score invalide'}), 400
         
         # Sauvegarder le score
         result = db.add_score(telegram_id, score)
+        logger.info(f"💾 Résultat sauvegarde: {result}")
         
         if result['success']:
             # Notifier le bot Telegram si possible (compatible Flask)
@@ -1163,6 +1163,8 @@ def check_game_access():
         telegram_id = request.args.get('telegram_id')
         mode = request.args.get('mode', 'competition')
         
+        logger.info(f"🔍 Vérification accès: telegram_id={telegram_id}, mode={mode}")
+        
         if not telegram_id:
             return jsonify({'error': 'telegram_id requis'}), 400
         
@@ -1170,6 +1172,7 @@ def check_game_access():
         
         # En mode démo, accès toujours autorisé
         if mode == 'demo':
+            logger.info(f"✅ Mode démo accordé pour {telegram_id}")
             return jsonify({
                 'access_granted': True,
                 'mode': 'demo',
@@ -1179,7 +1182,10 @@ def check_game_access():
         
         # En mode compétition, vérifier l'accès premium
         has_premium = db.check_user_access(telegram_id)
+        logger.info(f"🔍 Résultat vérification premium pour {telegram_id}: {has_premium}")
+        
         if not has_premium:
+            logger.warning(f"❌ Accès refusé pour {telegram_id} - pas de premium")
             return jsonify({
                 'access_granted': False,
                 'mode': 'competition',
@@ -3652,6 +3658,41 @@ def admin_recent_payments():
         
     except Exception as e:
         logger.error(f"❌ Erreur admin recent payments: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@flask_app.route('/debug/user-status/<int:telegram_id>', methods=['GET'])
+def debug_user_status(telegram_id):
+    """Debug complet du statut utilisateur"""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Récupérer utilisateur
+            cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+            user = cursor.fetchone()
+            
+            # Récupérer scores
+            cursor.execute("SELECT score, created_at, month_year FROM scores WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 10", (telegram_id,))
+            scores = cursor.fetchall()
+            
+            # Récupérer paiements  
+            cursor.execute("SELECT amount, status, payment_date, month_year FROM payments WHERE telegram_id = ? ORDER BY payment_date DESC LIMIT 10", (telegram_id,))
+            payments = cursor.fetchall()
+            
+            # Vérifier accès
+            has_access = db.check_user_access(telegram_id)
+            
+            return jsonify({
+                'telegram_id': telegram_id,
+                'user': dict(user) if user else None,
+                'scores': [dict(s) for s in scores] if scores else [],
+                'payments': [dict(p) for p in payments] if payments else [],
+                'has_access': has_access,
+                'current_month': datetime.now().strftime('%Y-%m')
+            })
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur debug user status: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
