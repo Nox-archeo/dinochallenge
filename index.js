@@ -2939,11 +2939,16 @@ function initGameAPI() {
     if (gameState.mode === 'competition' && gameState.telegram_id) {
         showScoreMessage(`🏆 Mode Compétition activé!<br>Joueur: ${gameState.first_name || gameState.username || 'Anonyme'}`);
         
-        // Vérifier l'accès
-        checkUserAccess().then(hasAccess => {
-            if (!hasAccess) {
-                showScoreMessage('⚠️ Accès premium requis pour le mode compétition');
+        // Vérifier l'accès avec la bonne API
+        checkGameAccess().then(result => {
+            if (result.access_granted) {
+                showScoreMessage(`✅ Accès accordé!<br>🎮 Parties restantes: ${result.remaining_games}/5`);
+            } else {
+                showScoreMessage(`❌ ${result.error || 'Accès premium requis'}<br>💰 Effectuez un paiement pour jouer`);
             }
+        }).catch(error => {
+            console.error('❌ Erreur vérification accès:', error);
+            showScoreMessage('⚠️ Erreur de vérification - Contactez le support');
         });
     } else {
         showScoreMessage('🆓 Mode Démo - Scores non enregistrés');
