@@ -3854,34 +3854,6 @@ def reset_user_data():
         logger.error(f"❌ Erreur suppression scores utilisateur: {e}")
         return jsonify({'error': str(e)}), 500
 
-@flask_app.route('/temp-delete-seb-score', methods=['GET'])
-def temp_delete_seb_score():
-    """Endpoint temporaire pour supprimer le score de seb"""
-    try:
-        telegram_id = 5932296330
-        
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Supprimer les scores de l'utilisateur
-            cursor.execute("""
-                DELETE FROM scores WHERE telegram_id = %s
-            """ if db.is_postgres else """
-                DELETE FROM scores WHERE telegram_id = ?
-            """, (telegram_id,))
-            
-            conn.commit()
-            
-        logger.info(f"🧹 TEMP: Scores supprimés pour seb {telegram_id}")
-        return jsonify({
-            'success': True,
-            'message': f'Scores supprimés pour seb {telegram_id}'
-        })
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur suppression scores seb: {e}")
-        return jsonify({'error': str(e)}), 500
-
 if __name__ == '__main__':
     main()
 
