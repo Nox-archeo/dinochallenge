@@ -2974,9 +2974,10 @@ function hookGameOver() {
             // Appeler la fonction gameOver originale
             originalGameOver.call(this);
             
-            // Envoyer le score automatiquement
-            const score = Math.ceil(this.distanceRan);
-            console.log('🎯 Game Over! Score:', score);
+            // Obtenir le VRAI score affiché (pas la distance technique)
+            const actualDistance = this.distanceMeter.getActualDistance(Math.ceil(this.distanceRan));
+            const score = actualDistance;
+            console.log('🎯 Game Over! Distance technique:', Math.ceil(this.distanceRan), 'Score réel:', score);
             
             // Envoyer le score si en mode compétition
             if (gameState.mode === 'competition' && gameState.telegram_id) {
