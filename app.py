@@ -3807,30 +3807,19 @@ def reset_test_data():
         with db.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Supprimer le score de test 123456789 = 2500 pts
-            cursor.execute("""
-                DELETE FROM scores WHERE telegram_id = %s
-            """ if db.is_postgres else """
-                DELETE FROM scores WHERE telegram_id = ?
-            """, (123456789,))
-            
-            # Supprimer l'utilisateur de test
-            cursor.execute("""
-                DELETE FROM users WHERE telegram_id = %s
-            """ if db.is_postgres else """
-                DELETE FROM users WHERE telegram_id = ?
-            """, (123456789,))
+            # Supprimer TOUS les scores pour test propre
+            cursor.execute("DELETE FROM scores")
             
             conn.commit()
             
-        logger.info("🧹 Données de test supprimées (utilisateur 123456789)")
+        logger.info("🧹 TOUS les scores supprimés pour test propre")
         return jsonify({
             'success': True,
-            'message': 'Données de test supprimées avec succès'
+            'message': 'TOUS les scores supprimés - classement remis à zéro'
         })
         
     except Exception as e:
-        logger.error(f"❌ Erreur suppression données test: {e}")
+        logger.error(f"❌ Erreur suppression scores: {e}")
         return jsonify({'error': str(e)}), 500
 
 @flask_app.route('/admin/reset-user-data', methods=['POST'])
