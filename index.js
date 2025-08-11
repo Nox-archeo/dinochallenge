@@ -2831,11 +2831,21 @@ async function submitScore(score) {
             gameState.dailyGames = data.daily_games;
             gameState.remainingGames = data.remaining_games;
             
-            // Afficher le message de succès
-            showScoreMessage(`🎯 Score enregistré: ${score} points!<br>Parties restantes: ${data.remaining_games}/5`);
+            // Afficher le message selon la situation
+            if (data.limit_reached) {
+                showScoreMessage(`🎯 Score enregistré: ${score} points!<br>🚫 Limite atteinte: 5 parties effectuées<br>🔄 Vous pouvez rejouer en mode classé demain`);
+            } else {
+                showScoreMessage(`🎯 Score enregistré: ${score} points!<br>🎮 Parties restantes: ${data.remaining_games}/5`);
+            }
         } else {
             console.error('❌ Erreur envoi score:', data.error);
-            showScoreMessage(`❌ ${data.error}`);
+            if (data.error.includes('premium')) {
+                showScoreMessage(`❌ Accès premium requis<br>💰 Effectuez un paiement pour jouer en mode classé`);
+            } else if (data.error.includes('limite')) {
+                showScoreMessage(`🚫 Limite quotidienne atteinte<br>🔄 Revenez demain pour 5 nouvelles parties`);
+            } else {
+                showScoreMessage(`❌ Erreur: ${data.error}`);
+            }
         }
 
         return data;
@@ -2908,11 +2918,18 @@ async function checkUserAccess() {
 function initGameAPI() {
     const params = getUrlParams();
     
-    // Sauvegarder les paramètres
+    // Sauvegarder les paramètres avec valeur par défaut intelligente
     gameState.telegram_id = params.telegram_id;
     gameState.username = params.username;
     gameState.first_name = params.first_name;
-    gameState.mode = params.mode;
+    
+    // Si on a un telegram_id mais pas de mode spécifié, utiliser competition
+    if (params.telegram_id && !params.mode) {
+        gameState.mode = 'competition';
+        console.log('🎯 Mode auto-détecté: competition (telegram_id présent)');
+    } else {
+        gameState.mode = params.mode || 'demo';
+    }
 
     console.log('🎮 Dino Challenge initialisé:', gameState);
 

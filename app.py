@@ -434,9 +434,28 @@ class DatabaseManager:
         if not month_year:
             month_year = datetime.now().strftime('%Y-%m')
         
+        logger.info(f"🏆 Récupération classement pour {month_year}, limite: {limit}")
+        
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
+                
+                # D'abord, vérifier quels scores existent
+                cursor.execute("""
+                    SELECT telegram_id, score, created_at FROM scores 
+                    WHERE month_year = ? ORDER BY telegram_id, score DESC
+                """ if not self.is_postgres else """
+                    SELECT telegram_id, score, created_at FROM scores 
+                    WHERE month_year = %s ORDER BY telegram_id, score DESC
+                """, (month_year,))
+                
+                all_scores = cursor.fetchall()
+                logger.info(f"📊 Scores trouvés pour {month_year}: {len(all_scores)}")
+                for score in all_scores[:10]:  # Log les 10 premiers
+                    if self.is_postgres:
+                        logger.info(f"  Score: {score['telegram_id']} = {score['score']} ({score['created_at']})")
+                    else:
+                        logger.info(f"  Score: {score[0]} = {score[1]} ({score[2]})")
                 
                 if self.is_postgres:
                     cursor.execute("""
@@ -467,17 +486,17 @@ class DatabaseManager:
                         LIMIT %s
                     """, (month_year, month_year, limit))
                 else:
+                    # Requête SQLite corrigée pour éviter les problèmes de GROUP BY
                     cursor.execute("""
                         SELECT 
                             u.telegram_id,
                             COALESCE(u.display_name, u.first_name, u.username, 'Anonyme') as display_name,
                             u.username,
-                            MAX(s.score) as best_score,
-                            COUNT(s.id) as total_games,
+                            (SELECT MAX(score) FROM scores s2 WHERE s2.telegram_id = u.telegram_id AND s2.month_year = ?) as best_score,
+                            (SELECT COUNT(*) FROM scores s3 WHERE s3.telegram_id = u.telegram_id AND s3.month_year = ?) as total_games,
                             u.has_paid_current_month
                         FROM users u
-                        JOIN scores s ON u.telegram_id = s.telegram_id
-                        WHERE s.month_year = ? 
+                        WHERE EXISTS (SELECT 1 FROM scores s WHERE s.telegram_id = u.telegram_id AND s.month_year = ?)
                           AND (u.has_paid_current_month = 1 
                                OR EXISTS (
                                    SELECT 1 FROM payments p 
@@ -490,13 +509,32 @@ class DatabaseManager:
                                    WHERE sub.telegram_id = u.telegram_id 
                                      AND sub.status = 'active'
                                ))
-                        GROUP BY u.telegram_id, u.display_name, u.first_name, u.username, u.has_paid_current_month
                         ORDER BY best_score DESC
                         LIMIT ?
-                    """, (month_year, month_year, limit))
+                    """, (month_year, month_year, month_year, month_year, limit))
                 
                 results = cursor.fetchall()
-                return [dict(row) for row in results]
+                
+                logger.info(f"🏆 Résultats classement: {len(results)} joueurs")
+                leaderboard_data = []
+                for i, row in enumerate(results):
+                    if self.is_postgres:
+                        player_data = dict(row)
+                    else:
+                        # Pour SQLite, créer le dict manuellement
+                        player_data = {
+                            'telegram_id': row[0],
+                            'display_name': row[1],
+                            'username': row[2],
+                            'best_score': row[3],
+                            'total_games': row[4],
+                            'has_paid_current_month': row[5]
+                        }
+                    
+                    logger.info(f"  #{i+1}: {player_data['display_name']} = {player_data['best_score']} pts ({player_data['total_games']} parties)")
+                    leaderboard_data.append(player_data)
+                
+                return leaderboard_data
                 
         except Exception as e:
             logger.error(f"❌ Erreur récupération classement: {e}")
