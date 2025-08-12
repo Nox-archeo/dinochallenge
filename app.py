@@ -1098,16 +1098,9 @@ def home():
     """
     return render_template_string(html, game_url=GAME_URL)
 
-def check_game_access():
 @flask_app.route('/api/check-access', methods=['GET'], endpoint='check_game_access_dash')
-    """Vérifier si l'utilisateur peut encore jouer aujourd'hui"""
-    try:
-        telegram_id = request.args.get('telegram_id')
-        mode = request.args.get('mode', 'competition')
-        
-        logger.info(f"🔍 Vérification accès: {telegram_id}, mode: {mode}")
-        
-        if not telegram_id:
+def check_game_access_alternative():
+    return check_game_access()
             return jsonify({
                 'can_play': False,
                 'error': 'telegram_id requis'
