@@ -1101,18 +1101,6 @@ def home():
 @flask_app.route('/api/check-access', methods=['GET'], endpoint='check_game_access_dash')
 def check_game_access_alternative():
     return check_game_access()
-    # Mode compétition = vérifier accès premium et limite quotidienne
-        try:
-            telegram_id = int(telegram_id)
-        except ValueError:
-            return jsonify({
-                'can_play': False,
-                'error': 'telegram_id invalide'
-            }), 400
-        
-        # Vérifier l'accès premium
-        has_access = db.check_user_access(telegram_id)
-        if not has_access:
             return jsonify({
                 'can_play': False,
                 'error': 'Accès premium requis',
