@@ -1098,8 +1098,8 @@ def home():
     """
     return render_template_string(html, game_url=GAME_URL)
 
-@flask_app.route('/api/check_access', methods=['GET'])
 def check_game_access():
+@flask_app.route('/api/check-access', methods=['GET'], endpoint='check_game_access_dash')
     """Vérifier si l'utilisateur peut encore jouer aujourd'hui"""
     try:
         telegram_id = request.args.get('telegram_id')
