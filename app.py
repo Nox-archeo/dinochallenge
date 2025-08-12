@@ -1101,13 +1101,7 @@ def home():
 @flask_app.route('/api/check-access', methods=['GET'], endpoint='check_game_access_dash')
 def check_game_access_alternative():
     return check_game_access()
-            return jsonify({
-                'can_play': True,
-                'mode': 'demo',
-                'message': 'Mode démo - accès illimité'
-            })
-        
-        # Mode compétition = vérifier accès premium et limite quotidienne
+    # Mode compétition = vérifier accès premium et limite quotidienne
         try:
             telegram_id = int(telegram_id)
         except ValueError:
