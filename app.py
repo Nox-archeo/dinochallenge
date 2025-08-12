@@ -1102,13 +1102,6 @@ def home():
 def check_game_access_alternative():
     return check_game_access()
             return jsonify({
-                'can_play': False,
-                'error': 'telegram_id requis'
-            }), 400
-        
-        # Mode démo = toujours autorisé
-        if mode == 'demo':
-            return jsonify({
                 'can_play': True,
                 'mode': 'demo',
                 'message': 'Mode démo - accès illimité'
