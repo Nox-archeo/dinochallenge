@@ -1192,7 +1192,7 @@ def check_game_access():
         }), 500
 
 # Route alternative avec tiret pour compatibilité
-@flask_app.route('/api/check-access', methods=['GET'])
+@flask_app.route('/api/check-access', methods=['GET'], endpoint='check_game_access_dash')
 def check_game_access_alternative():
     """Route alternative avec tiret - redirige vers check_game_access"""
     return check_game_access()
