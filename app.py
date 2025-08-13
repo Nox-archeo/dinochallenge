@@ -1098,61 +1098,8 @@ def home():
     """
     return render_template_string(html, game_url=GAME_URL)
 
-@flask_app.route('/api/check-access', methods=['GET'], endpoint='check_game_access_dash')
-def check_game_access_alternative():
-    return check_game_access()
-        # Utiliser l'heure française (UTC+2 en été, UTC+1 en hiver)
-        from datetime import timezone, timedelta
-        
-        france_tz = timezone(timedelta(hours=2))
-        today_france = datetime.now(france_tz).date()
-        
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT COUNT(*) FROM scores 
-                WHERE telegram_id = %s AND DATE(created_at AT TIME ZONE 'Europe/Paris') = %s
-            """ if db.is_postgres else """
-                SELECT COUNT(*) FROM scores 
-                WHERE telegram_id = ? AND DATE(created_at, '+2 hours') = ?
-            """, (telegram_id, today_france))
-            
-            result = cursor.fetchone()
-            if result:
-                if isinstance(result, dict):
-                    daily_games = result['count'] or 0
-                else:
-                    daily_games = result[0] if result[0] is not None else 0
-            else:
-                daily_games = 0
-        
-        remaining_games = max(0, 5 - daily_games)
-        
-        if daily_games >= 5:
-            return jsonify({
-                'can_play': False,
-                'daily_games': daily_games,
-                'remaining_games': 0,
-                'limit_reached': True,
-                'message': 'Limite quotidienne atteinte ! Vous avez déjà joué 5 parties aujourd\'hui. Revenez demain.'
-            })
-        else:
-            return jsonify({
-                'can_play': True,
-                'daily_games': daily_games,
-                'remaining_games': remaining_games,
-                'message': f'Vous pouvez encore jouer {remaining_games} partie(s) aujourd\'hui'
-            })
-            
-    except Exception as e:
-        logger.error(f"❌ Erreur vérification accès: {e}")
-        return jsonify({
-            'can_play': False,
-            'error': 'Erreur serveur'
-        }), 500
 
-# Route alternative avec tiret pour compatibilité
+
 @flask_app.route('/api/check-access', methods=['GET'], endpoint='check_game_access_dash')
 def check_game_access_alternative():
     """Route alternative avec tiret - redirige vers check_game_access"""
