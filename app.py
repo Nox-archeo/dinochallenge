@@ -1101,13 +1101,6 @@ def home():
 @flask_app.route('/api/check-access', methods=['GET'], endpoint='check_game_access_dash')
 def check_game_access_alternative():
     return check_game_access()
-            return jsonify({
-                'can_play': False,
-                'error': 'Accès premium requis',
-                'message': 'Vous devez payer pour participer au concours'
-            })
-        
-        # Vérifier la limite quotidienne
         # Utiliser l'heure française (UTC+2 en été, UTC+1 en hiver)
         from datetime import timezone, timedelta
         
