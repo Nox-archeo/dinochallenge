@@ -18,7 +18,11 @@ async def play_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Créer le bouton pour jouer
-    keyboard = [[InlineKeyboardButton("🎮 Lancer le jeu", url=play_check['game_url'])]]
+    # Ajoute le paramètre mode=competition à l'URL pour le mode classé
+    game_url = play_check['game_url']
+    if "mode=" not in game_url:
+        game_url += "?mode=competition"
+    keyboard = [[InlineKeyboardButton("🎮 Lancer le jeu", url=game_url)]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     game_stats = game_manager.get_game_stats(user_id)
