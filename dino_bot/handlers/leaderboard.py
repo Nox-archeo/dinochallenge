@@ -25,7 +25,6 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     days_left = days_until_month_end()
     
-    message = f"""
 🏆 **Classement {month_names[month]} {year}**
 
 💰 **Cagnotte totale :** {prize_pool:.2f} CHF
@@ -38,6 +37,16 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 📊 **Top 10 :**
 """
+    message = (
+        f"🏆 Classement {month_names[month]} {year}\n"
+        f"\n💰 Cagnotte totale : {prize_pool:.2f} CHF"
+        f"\n⏰ Fin du concours : Dans {days_left} jour(s)"
+        f"\n\n🏅 Récompenses :"
+        f"\n🥇 1er place : {prizes[1]:.2f} CHF (40%)"
+        f"\n🥈 2e place : {prizes[2]:.2f} CHF (15%)"
+        f"\n🥉 3e place : {prizes[3]:.2f} CHF (5%)"
+        f"\n\n📊 Top 10 :"
+    )
     
     if not leaderboard:
         message += "\n❌ Aucun joueur classé ce mois-ci."
