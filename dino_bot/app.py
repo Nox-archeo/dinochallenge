@@ -1189,28 +1189,28 @@ async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT
     
     if data.startswith("pay_once_"):
         telegram_id = int(data.replace("pay_once_", ""))
-        payment_url = f"https://dinochallenge-bot.onrender.com/create-payment"
+        payment_url = f"https://dinochallenge-bot.onrender.com/create-payment?telegram_id={telegram_id}"
         
-        message = "💳 **Paiement Unique - 0.05 CHF**\n\n"
-        message += "🔗 **Cliquez ici pour payer :**\n"
-        message += f"[💰 Payer avec PayPal]({payment_url}?telegram_id={telegram_id})\n\n"
+        message = "💳 Paiement Unique - 0.05 CHF\n\n"
+        message += "🔗 Cliquez sur le lien ci-dessous pour payer :\n\n"
+        message += f"{payment_url}\n\n"
         message += "📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
         message += "✅ Une fois payé, votre accès sera activé automatiquement !"
         
-        await query.edit_message_text(message, parse_mode='Markdown')
+        await query.edit_message_text(message)
     
     elif data.startswith("pay_subscription_"):
         telegram_id = int(data.replace("pay_subscription_", ""))
-        subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription"
+        subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription?telegram_id={telegram_id}"
         
-        message = "🔄 **Abonnement Mensuel - 0.05 CHF/mois**\n\n"
-        message += "🔗 **Cliquez ici pour vous abonner :**\n"
-        message += f"[🔄 S'abonner avec PayPal]({subscription_url}?telegram_id={telegram_id})\n\n"
+        message = "🔄 Abonnement Mensuel - 0.05 CHF/mois\n\n"
+        message += "🔗 Cliquez sur le lien ci-dessous pour vous abonner :\n\n"
+        message += f"{subscription_url}\n\n"
         message += "📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
         message += "✅ Accès permanent avec renouvellement automatique !\n"
-        message += "❌ Annulable à tout moment avec la commande /cancel_subscription"
+        message += "❌ Annulable à tout moment avec /cancel_subscription"
         
-        await query.edit_message_text(message, parse_mode='Markdown')
+        await query.edit_message_text(message)
 
 async def cancel_subscription_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Annuler l'abonnement PayPal"""
