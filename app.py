@@ -1255,22 +1255,15 @@ def check_game_access():
                 'message': 'Effectuez un paiement pour jouer'
             }), 403
         
-        # Vérifier les limites quotidiennes (si applicable)
-        current_date = datetime.now().strftime('%Y-%m-%d')
-        daily_games = db.get_daily_games_count(telegram_id, current_date)
-        max_daily_games = 50  # Limite généreuse pour les utilisateurs payants
-        
-        remaining_games = max_daily_games - daily_games
-        limit_reached = remaining_games <= 0
-        
+        # Utilisateur payant - accès autorisé
         return jsonify({
-            'can_play': not limit_reached,
+            'can_play': True,
             'mode': mode,
             'unlimited': False,
-            'daily_games': daily_games,
-            'remaining_games': max(0, remaining_games),
-            'limit_reached': limit_reached,
-            'message': f'Parties restantes: {max(0, remaining_games)}' if not limit_reached else 'Limite quotidienne atteinte'
+            'daily_games': 0,
+            'remaining_games': 999,
+            'limit_reached': False,
+            'message': 'Accès autorisé - mode compétition'
         })
         
     except Exception as e:
