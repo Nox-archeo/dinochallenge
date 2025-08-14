@@ -1303,6 +1303,37 @@ def get_leaderboard():
         logger.error(f"❌ Erreur récupération classement: {e}")
         return jsonify({'error': str(e)}), 500
 
+@flask_app.route('/api/debug/delete_user/<int:telegram_id>', methods=['DELETE'])
+def debug_delete_user(telegram_id):
+    """TEMPORAIRE : Supprimer un utilisateur pour tests"""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Supprimer dans l'ordre : scores, payments, puis users
+            tables = ['scores', 'payments', 'users']
+            
+            for table in tables:
+                if db.is_postgres:
+                    cursor.execute(f"DELETE FROM {table} WHERE telegram_id = %s", (telegram_id,))
+                else:
+                    cursor.execute(f"DELETE FROM {table} WHERE telegram_id = ?", (telegram_id,))
+            
+            conn.commit()
+            logger.info(f"🗑️ DÉBUG: Données supprimées pour utilisateur {telegram_id}")
+            
+            return jsonify({
+                'success': True,
+                'message': f'Utilisateur {telegram_id} supprimé de tous les tables'
+            })
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur suppression debug: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @flask_app.route('/api/check_access', methods=['GET'])
 def check_game_access():
     """Vérifier l'accès au jeu pour un utilisateur"""
