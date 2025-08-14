@@ -1303,6 +1303,37 @@ def get_leaderboard():
         logger.error(f"❌ Erreur récupération classement: {e}")
         return jsonify({'error': str(e)}), 500
 
+@flask_app.route('/api/debug/reset_all', methods=['DELETE'])
+def debug_reset_all():
+    """TEMPORAIRE : Vider toutes les tables pour reset complet"""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Vider toutes les tables dans l'ordre
+            tables = ['scores', 'payments', 'users']
+            
+            for table in tables:
+                if db.is_postgres:
+                    cursor.execute(f"DELETE FROM {table}")
+                else:
+                    cursor.execute(f"DELETE FROM {table}")
+            
+            conn.commit()
+            logger.info(f"🗑️ RESET: Toutes les tables vidées")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Reset complet - toutes les données supprimées'
+            })
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur reset: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @flask_app.route('/api/debug/delete_user/<int:telegram_id>', methods=['DELETE'])
 def debug_delete_user(telegram_id):
     """TEMPORAIRE : Supprimer un utilisateur pour tests"""
