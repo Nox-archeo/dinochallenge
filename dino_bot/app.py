@@ -1178,39 +1178,50 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestionnaire pour les callbacks de paiement"""
-    query = update.callback_query
-    await query.answer()
-    
-    data = query.data
-    
-    if data == "cancel_payment":
-        await query.edit_message_text("❌ **Paiement annulé.**")
-        return
-    
-    if data.startswith("pay_once_"):
-        telegram_id = int(data.replace("pay_once_", ""))
-        payment_url = f"https://dinochallenge-bot.onrender.com/create-payment?telegram_id={telegram_id}"
+    try:
+        query = update.callback_query
+        await query.answer()
         
-        message = "💳 Paiement Unique - 0.05 CHF\n\n"
-        message += "🔗 Cliquez sur le lien ci-dessous pour payer :\n\n"
-        message += f"{payment_url}\n\n"
-        message += "📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
-        message += "✅ Une fois payé, votre accès sera activé automatiquement !"
+        data = query.data
+        logger.info(f"🔧 Debug - Callback data: {data}")
         
-        await query.edit_message_text(message)
+        if data == "cancel_payment":
+            await query.edit_message_text("❌ Paiement annulé.")
+            return
+        
+        if data.startswith("pay_once_"):
+            telegram_id = int(data.replace("pay_once_", ""))
+            payment_url = f"https://dinochallenge-bot.onrender.com/create-payment?telegram_id={telegram_id}"
+            
+            message = "💳 Paiement Unique - 0.05 CHF\n\n"
+            message += "🔗 Cliquez sur le lien ci-dessous pour payer :\n\n"
+            message += f"{payment_url}\n\n"
+            message += "📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
+            message += "✅ Une fois payé, votre accès sera activé automatiquement !"
+            
+            await query.edit_message_text(message)
+        
+        elif data.startswith("pay_subscription_"):
+            telegram_id = int(data.replace("pay_subscription_", ""))
+            subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription?telegram_id={telegram_id}"
+            
+            message = "🔄 Abonnement Mensuel - 0.05 CHF/mois\n\n"
+            message += "🔗 Cliquez sur le lien ci-dessous pour vous abonner :\n\n"
+            message += f"{subscription_url}\n\n"
+            message += "📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
+            message += "✅ Accès permanent avec renouvellement automatique !\n"
+            message += "❌ Annulable à tout moment avec /cancel_subscription"
+            
+            logger.info(f"🔧 Debug - Message abonnement (longueur: {len(message)})")
+            await query.edit_message_text(message)
+            logger.info("✅ Message abonnement envoyé avec succès")
     
-    elif data.startswith("pay_subscription_"):
-        telegram_id = int(data.replace("pay_subscription_", ""))
-        subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription?telegram_id={telegram_id}"
-        
-        message = "🔄 Abonnement Mensuel - 0.05 CHF/mois\n\n"
-        message += "🔗 Cliquez sur le lien ci-dessous pour vous abonner :\n\n"
-        message += f"{subscription_url}\n\n"
-        message += "📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
-        message += "✅ Accès permanent avec renouvellement automatique !\n"
-        message += "❌ Annulable à tout moment avec /cancel_subscription"
-        
-        await query.edit_message_text(message)
+    except Exception as e:
+        logger.error(f"❌ Erreur callback query: {e}")
+        try:
+            await query.edit_message_text("❌ Erreur lors du traitement. Veuillez réessayer.")
+        except:
+            logger.error("❌ Impossible d'envoyer le message d'erreur")
 
 async def cancel_subscription_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Annuler l'abonnement PayPal"""
