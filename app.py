@@ -1220,6 +1220,67 @@ def get_leaderboard():
         logger.error(f"❌ Erreur récupération classement: {e}")
         return jsonify({'error': str(e)}), 500
 
+@flask_app.route('/api/check_access', methods=['GET'])
+def check_game_access():
+    """Vérifier l'accès au jeu pour un utilisateur"""
+    try:
+        telegram_id = request.args.get('telegram_id')
+        mode = request.args.get('mode', 'demo')
+        
+        if not telegram_id:
+            return jsonify({
+                'can_play': False,
+                'error': 'telegram_id manquant'
+            }), 400
+        
+        telegram_id = int(telegram_id)
+        
+        # En mode démo, tout le monde peut jouer
+        if mode == 'demo':
+            return jsonify({
+                'can_play': True,
+                'mode': 'demo',
+                'unlimited': True,
+                'message': 'Mode démo - accès illimité'
+            })
+        
+        # En mode compétition, vérifier l'accès
+        has_access = db.check_user_access(telegram_id)
+        
+        if not has_access:
+            return jsonify({
+                'can_play': False,
+                'mode': mode,
+                'error': 'Accès refusé',
+                'message': 'Effectuez un paiement pour jouer'
+            }), 403
+        
+        # Vérifier les limites quotidiennes (si applicable)
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        daily_games = db.get_daily_games_count(telegram_id, current_date)
+        max_daily_games = 50  # Limite généreuse pour les utilisateurs payants
+        
+        remaining_games = max_daily_games - daily_games
+        limit_reached = remaining_games <= 0
+        
+        return jsonify({
+            'can_play': not limit_reached,
+            'mode': mode,
+            'unlimited': False,
+            'daily_games': daily_games,
+            'remaining_games': max(0, remaining_games),
+            'limit_reached': limit_reached,
+            'message': f'Parties restantes: {max(0, remaining_games)}' if not limit_reached else 'Limite quotidienne atteinte'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur vérification accès: {e}")
+        return jsonify({
+            'can_play': False,
+            'error': 'Erreur serveur',
+            'message': str(e)
+        }), 500
+
 # FONCTIONS PAYPAL API V2
 # =============================================================================
 
