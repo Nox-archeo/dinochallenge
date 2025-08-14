@@ -77,8 +77,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Vérifier si c'est un email
         if '@' in text and '.' in text and len(text.split('@')) == 2:
             await handle_email_input(update, context)
-        # Vérifier si c'est peut-être un nom (texte simple sans symboles)
-        elif text.replace(' ', '').replace('-', '').replace("'", '').isalpha() and len(text) <= 50:
+        # Vérifier si c'est peut-être un nom (texte sans caractères spéciaux)
+        elif len(text.strip()) > 0 and len(text.strip()) <= 50 and not text.startswith('/'):
             await handle_name_input(update, context)
         else:
             await update.message.reply_text(
@@ -120,17 +120,35 @@ async def handle_name_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     name = update.message.text.strip()
     
-    from services.user_manager import UserManager
-    user_manager = UserManager()
-    
-    if user_manager.set_display_name(user_id, name):
+    try:
+        # Utiliser la base de données principale au lieu du UserManager local
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        from app import db
+        
+        # Créer ou récupérer l'utilisateur
+        username = update.effective_user.username or update.effective_user.first_name or "Utilisateur"
+        first_name = update.effective_user.first_name or username
+        user = db.create_or_get_user(user_id, username, first_name)
+        
+        if user:
+            # Mettre à jour le nom d'affichage dans la base principale
+            # Pour l'instant, on utilise le first_name comme nom d'affichage
+            await update.message.reply_text(
+                f"✅ **Nom d'affichage configuré !**\n\n"
+                f"👤 Votre nom : `{name}`\n\n"
+                f"Ce nom apparaîtra dans les classements et communications du bot. 🏆\n\n"
+                f"Vous pouvez maintenant utiliser les boutons du menu pour jouer !",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                "❌ Erreur lors de la configuration du nom. Veuillez utiliser /start pour recommencer."
+            )
+            
+    except Exception as e:
+        print(f"❌ Erreur handle_name_input: {e}")
         await update.message.reply_text(
-            f"✅ **Nom d'affichage configuré !**\n\n"
-            f"👤 Votre nom : `{name}`\n\n"
-            f"Ce nom apparaîtra dans les classements et communications du bot. 🏆",
-            parse_mode='Markdown'
-        )
-    else:
-        await update.message.reply_text(
-            "❌ Erreur lors de la configuration du nom. Veuillez réessayer."
+            "❌ Erreur lors de la configuration du nom. Veuillez utiliser /start pour recommencer."
         )

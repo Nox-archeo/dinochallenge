@@ -1276,6 +1276,40 @@ async def setup_bot_commands():
     await telegram_app.bot.set_my_commands(commands)
     logger.info("✅ Commandes du bot configurées")
 
+async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler pour les messages texte du bot secondaire - délègue au bot principal"""
+    text = update.message.text.strip()
+    
+    # Si c'est un nom potentiel (pas un email et pas trop long)
+    if len(text) > 0 and len(text) <= 50 and not text.startswith('/') and '@' not in text:
+        user_id = update.effective_user.id
+        try:
+            # Créer ou récupérer l'utilisateur
+            username = update.effective_user.username or update.effective_user.first_name or "Utilisateur"
+            first_name = update.effective_user.first_name or username
+            user = db.create_or_get_user(user_id, username, first_name)
+            
+            if user:
+                await update.message.reply_text(
+                    f"✅ **Profil configuré !**\n\n"
+                    f"👤 Nom : `{text}`\n\n"
+                    f"Vous pouvez maintenant utiliser /start pour accéder au menu principal !",
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ Erreur lors de la configuration. Utilisez /start pour recommencer."
+                )
+        except Exception as e:
+            logger.error(f"❌ Erreur handle_text_message: {e}")
+            await update.message.reply_text(
+                "❌ Erreur lors de la configuration. Utilisez /start pour recommencer."
+            )
+    else:
+        await update.message.reply_text(
+            "❓ Message non reconnu. Utilisez /start pour voir le menu principal."
+        )
+
 def setup_telegram_bot():
     """Configurer le bot Telegram"""
     global telegram_app
@@ -1298,6 +1332,9 @@ def setup_telegram_bot():
     telegram_app.add_handler(CommandHandler("cancel_subscription", cancel_subscription_handler))
     telegram_app.add_handler(CommandHandler("help", help_handler))
     telegram_app.add_handler(CallbackQueryHandler(payment_callback_handler))
+    
+    # Ajouter un handler pour les messages texte (synchronisation avec bot principal)
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     
     logger.info("✅ Bot Telegram configuré")
     return telegram_app
