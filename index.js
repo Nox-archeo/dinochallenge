@@ -706,7 +706,7 @@
          * Process keydown.
          * @param {Event} e
          */
-        onKeyDown: function (e) {
+        onKeyDown: async function (e) {
             // Prevent native page scrolling whilst tapping on mobile.
             if (IS_MOBILE && this.playing) {
                 e.preventDefault();
@@ -716,6 +716,36 @@
                 if (!this.crashed && (Runner.keycodes.JUMP[e.keyCode] ||
                     e.type == Runner.events.TOUCHSTART)) {
                     if (!this.playing) {
+                        // *** VÉRIFICATION D'ACCÈS AVANT DE DÉMARRER ***
+                        if (gameState.mode === 'competition') {
+                            console.log('🔒 Vérification accès avant démarrage (onKeyDown)...');
+                            
+                            try {
+                                const accessCheck = await checkGameAccess();
+                                
+                                if (!accessCheck.access_granted) {
+                                    console.log('❌ Accès refusé (onKeyDown):', accessCheck.error);
+                                    
+                                    // Afficher le message d'erreur et empêcher le démarrage
+                                    showScoreMessage(`❌ ${accessCheck.error || 'Accès refusé'}<br>💰 Effectuez un paiement pour jouer en mode compétition`);
+                                    
+                                    // RETOURNER SANS DÉMARRER LE JEU
+                                    return;
+                                }
+                                
+                                console.log('✅ Accès accordé (onKeyDown), démarrage autorisé');
+                                if (accessCheck.remaining_games !== undefined) {
+                                    showScoreMessage(`🎮 Parties restantes: ${accessCheck.remaining_games}/5`);
+                                }
+                                
+                            } catch (error) {
+                                console.error('❌ Erreur lors de la vérification d\'accès (onKeyDown):', error);
+                                showScoreMessage('⚠️ Erreur réseau - Veuillez réessayer');
+                                return; // Empêcher le démarrage en cas d'erreur réseau
+                            }
+                        }
+                        
+                        // Si on arrive ici, l'accès est autorisé ou on est en mode démo
                         this.loadSounds();
                         this.playing = true;
                         this.update();
