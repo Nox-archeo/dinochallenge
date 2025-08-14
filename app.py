@@ -768,10 +768,11 @@ class DatabaseManager:
         """Compter le nombre de parties jouées aujourd'hui par un utilisateur"""
         try:
             if date_str is None:
-                # Utiliser l'heure française (UTC+1 ou UTC+2 selon saison)
-                import pytz
-                tz_paris = pytz.timezone('Europe/Paris')
-                now_paris = datetime.now(tz_paris)
+                # Utiliser l'heure française (UTC+2 en été, UTC+1 en hiver)
+                # Approximation: ajouter 2 heures à UTC pour l'été
+                from datetime import timedelta
+                now_utc = datetime.utcnow()
+                now_paris = now_utc + timedelta(hours=2)  # Heure d'été française
                 date_str = now_paris.strftime('%Y-%m-%d')
             
             with self.get_connection() as conn:
@@ -782,7 +783,7 @@ class DatabaseManager:
                     cursor.execute("""
                         SELECT COUNT(*) FROM scores 
                         WHERE telegram_id = %s 
-                        AND DATE(created_at AT TIME ZONE 'Europe/Paris') = %s
+                        AND DATE(created_at + INTERVAL '2 hours') = %s
                     """, (telegram_id, date_str))
                 else:
                     # Pour SQLite, approximation avec UTC (peut être ajustée)
