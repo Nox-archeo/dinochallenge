@@ -63,16 +63,6 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         message += f"\n• Score moyen : {avg_score:.1f} pts"
 
     await update.message.reply_text(message)
-    total_players = len(leaderboard)
-    message += f"\n\n📈 **Statistiques :**"
-    message += f"\n• Joueurs participants : {total_players}"
-    message += f"\n• Votre rang : #{user_rank if user_rank > 0 else 'N/A'}"
-    
-    if total_players > 0:
-        avg_score = sum(p['score'] for p in leaderboard) / len(leaderboard)
-        message += f"\n• Score moyen : {avg_score:.1f} pts"
-    
-    await update.message.reply_text(message, parse_mode='Markdown')
 
 @require_registration
 async def top_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
