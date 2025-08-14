@@ -1303,68 +1303,6 @@ def get_leaderboard():
         logger.error(f"❌ Erreur récupération classement: {e}")
         return jsonify({'error': str(e)}), 500
 
-@flask_app.route('/api/debug/reset_all', methods=['DELETE'])
-def debug_reset_all():
-    """TEMPORAIRE : Vider toutes les tables pour reset complet"""
-    try:
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Vider toutes les tables dans l'ordre
-            tables = ['scores', 'payments', 'users']
-            
-            for table in tables:
-                if db.is_postgres:
-                    cursor.execute(f"DELETE FROM {table}")
-                else:
-                    cursor.execute(f"DELETE FROM {table}")
-            
-            conn.commit()
-            logger.info(f"🗑️ RESET: Toutes les tables vidées")
-            
-            return jsonify({
-                'success': True,
-                'message': 'Reset complet - toutes les données supprimées'
-            })
-            
-    except Exception as e:
-        logger.error(f"❌ Erreur reset: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@flask_app.route('/api/debug/delete_user/<int:telegram_id>', methods=['DELETE'])
-def debug_delete_user(telegram_id):
-    """TEMPORAIRE : Supprimer un utilisateur pour tests"""
-    try:
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Supprimer dans l'ordre : scores, payments, puis users
-            tables = ['scores', 'payments', 'users']
-            
-            for table in tables:
-                if db.is_postgres:
-                    cursor.execute(f"DELETE FROM {table} WHERE telegram_id = %s", (telegram_id,))
-                else:
-                    cursor.execute(f"DELETE FROM {table} WHERE telegram_id = ?", (telegram_id,))
-            
-            conn.commit()
-            logger.info(f"🗑️ DÉBUG: Données supprimées pour utilisateur {telegram_id}")
-            
-            return jsonify({
-                'success': True,
-                'message': f'Utilisateur {telegram_id} supprimé de tous les tables'
-            })
-            
-    except Exception as e:
-        logger.error(f"❌ Erreur suppression debug: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
 @flask_app.route('/api/check_access', methods=['GET'])
 def check_game_access():
     """Vérifier l'accès au jeu pour un utilisateur"""
@@ -1895,15 +1833,13 @@ def payment_success():
 
 @flask_app.route('/create-subscription', methods=['GET', 'POST'])
 def create_subscription():
-    """Créer un abonnement mensuel PayPal"""
+    """Créer un abonnement mensuel PayPal v2"""
     try:
         # Gérer les requêtes GET (depuis les liens Telegram)
         if request.method == 'GET':
             telegram_id = request.args.get('telegram_id')
             if not telegram_id:
                 return jsonify({'error': 'telegram_id requis'}), 400
-            # Traiter comme une requête POST avec les données de l'URL
-            data = {'telegram_id': telegram_id}
         else:
             # Requête POST normale
             data = request.get_json()
@@ -1912,91 +1848,211 @@ def create_subscription():
             if not telegram_id:
                 return jsonify({'error': 'telegram_id requis'}), 400
         
+        logger.info(f"🔄 Création abonnement PayPal v2 pour {telegram_id}")
+        
         # Créer le plan d'abonnement (si pas déjà créé)
-        plan_id = create_billing_plan()
+        plan_id = create_subscription_plan()
         if not plan_id:
             return jsonify({'error': 'Erreur création plan abonnement'}), 500
         
-        # Créer l'accord d'abonnement
-        billing_agreement = paypalrestsdk.BillingAgreement({
-            "name": "Dino Challenge - Abonnement Mensuel",
-            "description": f"Abonnement mensuel au Dino Challenge pour {telegram_id}",
-            "start_date": (datetime.now() + timedelta(minutes=1)).isoformat() + "Z",
-            "plan": {
-                "id": plan_id
-            },
-            "payer": {
-                "payment_method": "paypal"
-            }
-        })
-        
-        if billing_agreement.create():
-            # Trouver l'URL d'approbation
-            approval_url = None
-            for link in billing_agreement.links:
-                if link.rel == "approval_url":
-                    approval_url = link.href
-                    break
-            
-            # Si c'est une requête GET, rediriger directement vers PayPal
-            if request.method == 'GET':
-                return redirect(approval_url)
-            
-            # Si c'est une requête POST, retourner le JSON
-            return jsonify({
-                'agreement_id': billing_agreement.id,
-                'approval_url': approval_url,
-                'telegram_id': telegram_id
-            })
-        else:
-            logger.error(f"❌ Erreur création abonnement PayPal: {billing_agreement.error}")
+        # Créer l'abonnement
+        subscription_data = create_paypal_subscription(telegram_id, plan_id)
+        if not subscription_data:
             return jsonify({'error': 'Erreur création abonnement'}), 500
+        
+        # Si c'est une requête GET, rediriger directement vers PayPal
+        if request.method == 'GET':
+            return redirect(subscription_data['approval_url'])
+        
+        # Si c'est une requête POST, retourner le JSON
+        return jsonify(subscription_data)
             
     except Exception as e:
         logger.error(f"❌ Erreur endpoint create-subscription: {e}")
         return jsonify({'error': str(e)}), 500
 
-def create_billing_plan():
-    """Créer un plan de facturation PayPal"""
+def create_subscription_plan():
+    """Créer un plan d'abonnement PayPal v2"""
     try:
-        billing_plan = paypalrestsdk.BillingPlan({
-            "name": "Dino Challenge Monthly Plan",
-            "description": "Plan mensuel pour l'accès au Dino Challenge",
-            "type": "INFINITE",
-            "payment_definitions": [{
-                "name": "Monthly Payment",
-                "type": "REGULAR",
-                "frequency": "MONTH",
-                "frequency_interval": "1",
-                "cycles": "0",  # 0 = infini
-                "amount": {
-                    "value": str(MONTHLY_PRICE_CHF),
-                    "currency": "CHF"
+        logger.info(f"🔍 Création plan abonnement PayPal v2")
+        
+        # D'abord créer le produit si nécessaire
+        product_id = create_paypal_product()
+        if not product_id:
+            logger.error("❌ Impossible de créer le produit PayPal")
+            return None
+        
+        access_token = get_paypal_access_token()
+        if not access_token:
+            logger.error("❌ Token PayPal manquant pour plan")
+            return None
+        
+        url = f"{PAYPAL_BASE_URL}/v1/billing/plans"
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {access_token}',
+            'PayPal-Request-Id': f'plan_dino_{int(time.time())}'
+        }
+        
+        plan_data = {
+            "product_id": product_id,
+            "name": "Dino Challenge - Abonnement Mensuel",
+            "description": "Accès mensuel au jeu Dino Challenge avec classement",
+            "status": "ACTIVE",
+            "billing_cycles": [
+                {
+                    "frequency": {
+                        "interval_unit": "MONTH",
+                        "interval_count": 1
+                    },
+                    "tenure_type": "REGULAR",
+                    "sequence": 1,
+                    "total_cycles": 0,  # 0 = infini
+                    "pricing_scheme": {
+                        "fixed_price": {
+                            "value": str(MONTHLY_PRICE_CHF),
+                            "currency_code": "CHF"
+                        }
+                    }
                 }
-            }],
-            "merchant_preferences": {
+            ],
+            "payment_preferences": {
+                "auto_bill_outstanding": True,
                 "setup_fee": {
                     "value": "0",
-                    "currency": "CHF"
+                    "currency_code": "CHF"
                 },
-                "return_url": f"{GAME_URL}?subscription=success",
-                "cancel_url": f"{GAME_URL}?subscription=cancelled",
-                "auto_bill_amount": "YES",
-                "initial_fail_amount_action": "CONTINUE",
-                "max_fail_attempts": "3"
+                "setup_fee_failure_action": "CONTINUE",
+                "payment_failure_threshold": 3
             }
-        })
+        }
         
-        if billing_plan.create():
-            # Activer le plan
-            if billing_plan.activate():
-                return billing_plan.id
+        response = requests.post(url, headers=headers, json=plan_data)
         
-        logger.error(f"❌ Erreur création plan: {billing_plan.error}")
-        return None
-        
+        if response.status_code == 201:
+            plan = response.json()
+            plan_id = plan['id']
+            logger.info(f"✅ Plan abonnement créé: {plan_id}")
+            return plan_id
+        else:
+            logger.error(f"❌ Erreur création plan: {response.status_code} - {response.text}")
+            return None
+            
     except Exception as e:
-        logger.error(f"❌ Erreur create_billing_plan: {e}")
+        logger.error(f"❌ Erreur create_subscription_plan: {e}")
+        return None
+
+def create_paypal_product():
+    """Créer un produit PayPal v2 pour l'abonnement"""
+    try:
+        logger.info(f"🔍 Création produit PayPal v2")
+        
+        access_token = get_paypal_access_token()
+        if not access_token:
+            logger.error("❌ Token PayPal manquant pour produit")
+            return None
+        
+        url = f"{PAYPAL_BASE_URL}/v1/catalogs/products"
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {access_token}',
+            'PayPal-Request-Id': f'product_dino_{int(time.time())}'
+        }
+        
+        product_data = {
+            "id": "DINO_CHALLENGE_PRODUCT",
+            "name": "Dino Challenge - Jeu Premium",
+            "description": "Accès premium au jeu Dino Challenge avec classements mensuels et prix",
+            "type": "SERVICE",
+            "category": "SOFTWARE",
+            "image_url": "https://dinochallenge-bot.onrender.com/assets/offline-sprite-1x.png",
+            "home_url": GAME_URL
+        }
+        
+        response = requests.post(url, headers=headers, json=product_data)
+        
+        if response.status_code == 201:
+            product = response.json()
+            product_id = product['id']
+            logger.info(f"✅ Produit PayPal créé: {product_id}")
+            return product_id
+        elif response.status_code == 409:
+            # Produit existe déjà
+            logger.info(f"✅ Produit PayPal existe déjà: DINO_CHALLENGE_PRODUCT")
+            return "DINO_CHALLENGE_PRODUCT"
+        else:
+            logger.error(f"❌ Erreur création produit: {response.status_code} - {response.text}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur create_paypal_product: {e}")
+        return None
+
+def create_paypal_subscription(telegram_id: int, plan_id: str):
+    """Créer un abonnement PayPal v2"""
+    try:
+        logger.info(f"🔍 Création abonnement PayPal v2 - telegram_id: {telegram_id}, plan: {plan_id}")
+        
+        access_token = get_paypal_access_token()
+        if not access_token:
+            logger.error("❌ Token PayPal manquant pour abonnement")
+            return None
+        
+        url = f"{PAYPAL_BASE_URL}/v1/billing/subscriptions"
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {access_token}',
+            'PayPal-Request-Id': f'sub_dino_{telegram_id}_{int(time.time())}'
+        }
+        
+        subscription_data = {
+            "plan_id": plan_id,
+            "start_time": (datetime.utcnow() + timedelta(minutes=1)).isoformat() + "Z",
+            "custom_id": f"dino_user_{telegram_id}",
+            "application_context": {
+                "brand_name": "Dino Challenge",
+                "locale": "fr-CH",
+                "shipping_preference": "NO_SHIPPING",
+                "user_action": "SUBSCRIBE_NOW",
+                "payment_method": {
+                    "payer_selected": "PAYPAL",
+                    "payee_preferred": "IMMEDIATE_PAYMENT_REQUIRED"
+                },
+                "return_url": f"{GAME_URL}?telegram_id={telegram_id}&subscription=success",
+                "cancel_url": f"{GAME_URL}?telegram_id={telegram_id}&subscription=cancelled"
+            }
+        }
+        
+        response = requests.post(url, headers=headers, json=subscription_data)
+        
+        if response.status_code == 201:
+            subscription = response.json()
+            subscription_id = subscription['id']
+            
+            # Trouver l'URL d'approbation
+            approval_url = None
+            for link in subscription.get('links', []):
+                if link['rel'] == 'approve':
+                    approval_url = link['href']
+                    break
+            
+            logger.info(f"✅ Abonnement créé: {subscription_id}")
+            
+            return {
+                'subscription_id': subscription_id,
+                'approval_url': approval_url,
+                'telegram_id': telegram_id,
+                'plan_id': plan_id
+            }
+        else:
+            logger.error(f"❌ Erreur création abonnement: {response.status_code} - {response.text}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur create_paypal_subscription: {e}")
         return None
 
 @flask_app.route('/paypal-webhook', methods=['POST'])
