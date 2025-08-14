@@ -482,7 +482,12 @@
                 document.head.appendChild(sheet);
 
                 this.containerEl.addEventListener(Runner.events.ANIM_END,
-                    this.startGame.bind(this));
+                    () => {
+                        // Wrapper pour gérer l'appel async
+                        this.startGame().catch(error => {
+                            console.error('❌ Erreur lors du démarrage du jeu:', error);
+                        });
+                    });
 
                 this.containerEl.style.webkitAnimation = 'intro .4s ease-out 1 both';
                 this.containerEl.style.width = this.dimensions.WIDTH + 'px';
@@ -501,7 +506,37 @@
         /**
          * Update the game status to started.
          */
-        startGame: function () {
+        startGame: async function () {
+            // Vérifier l'accès avant de démarrer (en mode compétition seulement)
+            if (gameState.mode === 'competition') {
+                console.log('🔒 Vérification accès en mode compétition...');
+                
+                try {
+                    const accessCheck = await checkGameAccess();
+                    
+                    if (!accessCheck.access_granted) {
+                        console.log('❌ Accès refusé:', accessCheck.error);
+                        
+                        // Afficher le message d'erreur et empêcher le démarrage
+                        showScoreMessage(`❌ ${accessCheck.error || 'Accès refusé'}<br>💰 Effectuez un paiement pour jouer en mode compétition`);
+                        
+                        // Arrêter l'exécution - ne pas démarrer le jeu
+                        return;
+                    }
+                    
+                    console.log('✅ Accès accordé, démarrage du jeu');
+                    if (accessCheck.remaining_games !== undefined) {
+                        showScoreMessage(`🎮 Parties restantes: ${accessCheck.remaining_games}/5`);
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Erreur lors de la vérification d\'accès:', error);
+                    showScoreMessage('⚠️ Erreur réseau - Veuillez réessayer');
+                    return; // Empêcher le démarrage en cas d'erreur réseau
+                }
+            }
+
+            // Si on arrive ici, l'accès est autorisé ou on est en mode démo
             this.setArcadeMode();
             this.runningTime = 0;
             this.playingIntro = false;
