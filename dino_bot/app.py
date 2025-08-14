@@ -1157,16 +1157,16 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [{"text": "❌ Annuler", "callback_data": "cancel_payment"}]
     ]
     
-    message = "💰 **PARTICIPER AU DINO CHALLENGE**\n\n"
-    message += "🎯 **Choisissez votre option de paiement :**\n\n"
-    message += "**💳 Paiement Unique (0.05 CHF)**\n"
+    message = "💰 PARTICIPER AU DINO CHALLENGE\n\n"
+    message += "🎯 Choisissez votre option de paiement :\n\n"
+    message += "💳 Paiement Unique (0.05 CHF)\n"
     message += "• Accès pour le mois en cours uniquement\n"
     message += "• À renouveler chaque mois manuellement\n\n"
-    message += "**🔄 Abonnement Mensuel (0.05 CHF/mois)**\n"
+    message += "🔄 Abonnement Mensuel (0.05 CHF/mois)\n"
     message += "• Accès permanent avec renouvellement automatique\n"
     message += "• Annulable à tout moment\n"
     message += "• Plus pratique, jamais d'interruption !\n\n"
-    message += "🏆 **Prix mensuels distribués au top 3 !**"
+    message += "🏆 Prix mensuels distribués au top 3 !"
     
     inline_keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("💳 Paiement Unique - 0.05 CHF", callback_data=f"pay_once_{user.id}")],
@@ -1174,7 +1174,7 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("❌ Annuler", callback_data="cancel_payment")]
     ])
     
-    await update.message.reply_text(message, parse_mode='Markdown', reply_markup=inline_keyboard)
+    await update.message.reply_text(message, reply_markup=inline_keyboard)
 
 async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestionnaire pour les callbacks de paiement"""
