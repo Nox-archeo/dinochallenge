@@ -63,41 +63,6 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         message += f"\n• Score moyen : {avg_score:.1f} pts"
 
     await update.message.reply_text(message)
-    message = f"🏆 Classement {month_names[month]} {year}\n"
-    message += f"\n💰 Cagnotte totale : {prize_pool:.2f} CHF"
-    message += f"\n⏰ Fin du concours : Dans {days_left} jour(s)"
-    message += f"\n\n🏅 Récompenses :"
-    message += f"\n🥇 1er place : {prizes[1]:.2f} CHF (40%)"
-    message += f"\n🥈 2e place : {prizes[2]:.2f} CHF (15%)"
-    message += f"\n🥉 3e place : {prizes[3]:.2f} CHF (5%)"
-    message += f"\n\n📊 Top 10 :"
-    
-    if not leaderboard:
-        message += "\n❌ Aucun joueur classé ce mois-ci."
-    else:
-        for i, player in enumerate(leaderboard[:10]):
-            rank = i + 1
-            emoji = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}."
-            
-            # Marquer l'utilisateur actuel
-            marker = " ← **VOUS**" if player['user_id'] == user_id else ""
-            
-            message += f"\n{emoji} {player['username']} - {player['score']} pts{marker}"
-    
-    # Position de l'utilisateur s'il n'est pas dans le top 10
-    from services.score_manager import ScoreManager
-    score_manager = ScoreManager()
-    user_rank = score_manager.get_user_rank(user_id)
-    user_best = score_manager.get_user_best_score(user_id)
-    
-    if user_rank > 10:
-        message += f"\n\n👤 **Votre position :** #{user_rank}"
-        message += f"\n🎯 **Votre meilleur score :** {user_best} pts"
-    elif user_rank == 0:
-        message += f"\n\n👤 **Votre position :** Non classé"
-        message += f"\n💡 Jouez une partie pour apparaître dans le classement !"
-    
-    # Statistiques supplémentaires
     total_players = len(leaderboard)
     message += f"\n\n📈 **Statistiques :**"
     message += f"\n• Joueurs participants : {total_players}"
