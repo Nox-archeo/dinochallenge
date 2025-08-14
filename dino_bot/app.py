@@ -1090,36 +1090,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(message, parse_mode='Markdown')
 
-async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Afficher le classement"""
-    try:
-        current_month = datetime.now().strftime('%Y-%m')
-        leaderboard = db.get_leaderboard(current_month, 10)
-        
-        if not leaderboard:
-            await update.message.reply_text("🏆 Aucun score enregistré ce mois-ci.")
-            return
-        
-        message = f"🏆 **CLASSEMENT - {datetime.now().strftime('%B %Y')}**\n\n"
-        
-        medals = ['🥇', '🥈', '🥉'] + ['🏅'] * 7
-        
-        for i, player in enumerate(leaderboard):
-            medal = medals[i] if i < len(medals) else '🏅'
-            name = player['first_name'] or player['username'] or 'Joueur Anonyme'
-            score = player['best_score']
-            games = player['total_games']
-            
-            message += f"{medal} **#{i+1} - {name}**\n"
-            message += f"   📊 {score:,} pts ({games} parties)\n\n"
-        
-        message += f"🎮 Jouez ici : {GAME_URL}"
-        
-        await update.message.reply_text(message, parse_mode='Markdown')
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur affichage classement: {e}")
-        await update.message.reply_text("❌ Erreur lors de la récupération du classement.")
+# leaderboard_handler supprimé - utilise maintenant handlers/leaderboard.py
 
 async def profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Afficher le profil utilisateur"""
@@ -1317,6 +1288,9 @@ def setup_telegram_bot():
         return None
     
     # Créer l'application bot
+    # Import des handlers depuis les modules séparés
+    from handlers.leaderboard import leaderboard_handler
+    
     telegram_app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
     # Ajouter les handlers
