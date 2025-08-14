@@ -1155,25 +1155,25 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Proposer les options de paiement
     keyboard = [
-        [{"text": "💳 Paiement Unique - 11 CHF", "callback_data": f"pay_once_{user.id}"}],
-        [{"text": "🔄 Abonnement Mensuel - 11 CHF/mois", "callback_data": f"pay_subscription_{user.id}"}],
+        [{"text": "💳 Paiement Unique - 0.05 CHF", "callback_data": f"pay_once_{user.id}"}],
+        [{"text": "🔄 Abonnement Mensuel - 0.05 CHF/mois", "callback_data": f"pay_subscription_{user.id}"}],
         [{"text": "❌ Annuler", "callback_data": "cancel_payment"}]
     ]
     
-    message = f"💰 **PARTICIPER AU DINO CHALLENGE**\n\n"
-    message += f"🎯 **Choisissez votre option de paiement :**\n\n"
-    message += f"**💳 Paiement Unique (11 CHF)**\n"
-    message += f"• Accès pour le mois en cours uniquement\n"
-    message += f"• À renouveler chaque mois manuellement\n\n"
-    message += f"**🔄 Abonnement Mensuel (11 CHF/mois)**\n"
-    message += f"• Accès permanent avec renouvellement automatique\n"
-    message += f"• Annulable à tout moment\n"
-    message += f"• Plus pratique, jamais d'interruption !\n\n"
-    message += f"🏆 **Prix mensuels distribués au top 3 !**"
+    message = "💰 **PARTICIPER AU DINO CHALLENGE**\n\n"
+    message += "🎯 **Choisissez votre option de paiement :**\n\n"
+    message += "**💳 Paiement Unique (0.05 CHF)**\n"
+    message += "• Accès pour le mois en cours uniquement\n"
+    message += "• À renouveler chaque mois manuellement\n\n"
+    message += "**🔄 Abonnement Mensuel (0.05 CHF/mois)**\n"
+    message += "• Accès permanent avec renouvellement automatique\n"
+    message += "• Annulable à tout moment\n"
+    message += "• Plus pratique, jamais d'interruption !\n\n"
+    message += "🏆 **Prix mensuels distribués au top 3 !**"
     
     inline_keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💳 Paiement Unique - 11 CHF", callback_data=f"pay_once_{user.id}")],
-        [InlineKeyboardButton("🔄 Abonnement Mensuel - 11 CHF/mois", callback_data=f"pay_subscription_{user.id}")],
+        [InlineKeyboardButton("💳 Paiement Unique - 0.05 CHF", callback_data=f"pay_once_{user.id}")],
+        [InlineKeyboardButton("🔄 Abonnement Mensuel - 0.05 CHF/mois", callback_data=f"pay_subscription_{user.id}")],
         [InlineKeyboardButton("❌ Annuler", callback_data="cancel_payment")]
     ])
     
@@ -1194,11 +1194,11 @@ async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT
         telegram_id = int(data.replace("pay_once_", ""))
         payment_url = f"https://dinochallenge-bot.onrender.com/create-payment"
         
-        message = f"💳 **Paiement Unique - 11 CHF**\n\n"
-        message += f"🔗 **Cliquez ici pour payer :**\n"
+        message = "💳 **Paiement Unique - 0.05 CHF**\n\n"
+        message += "🔗 **Cliquez ici pour payer :**\n"
         message += f"[💰 Payer avec PayPal]({payment_url}?telegram_id={telegram_id})\n\n"
-        message += f"📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
-        message += f"✅ Une fois payé, votre accès sera activé automatiquement !"
+        message += "📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
+        message += "✅ Une fois payé, votre accès sera activé automatiquement !"
         
         await query.edit_message_text(message, parse_mode='Markdown')
     
@@ -1206,12 +1206,12 @@ async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT
         telegram_id = int(data.replace("pay_subscription_", ""))
         subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription"
         
-        message = f"🔄 **Abonnement Mensuel - 11 CHF/mois**\n\n"
-        message += f"🔗 **Cliquez ici pour vous abonner :**\n"
+        message = "🔄 **Abonnement Mensuel - 0.05 CHF/mois**\n\n"
+        message += "🔗 **Cliquez ici pour vous abonner :**\n"
         message += f"[🔄 S'abonner avec PayPal]({subscription_url}?telegram_id={telegram_id})\n\n"
-        message += f"📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
-        message += f"✅ Accès permanent avec renouvellement automatique !\n"
-        message += f"❌ Annulable à tout moment avec /cancel_subscription"
+        message += "📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
+        message += "✅ Accès permanent avec renouvellement automatique !\n"
+        message += "❌ Annulable à tout moment avec la commande /cancel_subscription"
         
         await query.edit_message_text(message, parse_mode='Markdown')
 
