@@ -764,6 +764,47 @@ class DatabaseManager:
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return False
 
+    def get_daily_games_count(self, telegram_id: int, date_str: str = None) -> int:
+        """Compter le nombre de parties jouées aujourd'hui par un utilisateur"""
+        try:
+            if date_str is None:
+                # Utiliser l'heure française (UTC+1 ou UTC+2 selon saison)
+                import pytz
+                tz_paris = pytz.timezone('Europe/Paris')
+                now_paris = datetime.now(tz_paris)
+                date_str = now_paris.strftime('%Y-%m-%d')
+            
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Compter les scores enregistrés aujourd'hui
+                if self.is_postgres:
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM scores 
+                        WHERE telegram_id = %s 
+                        AND DATE(created_at AT TIME ZONE 'Europe/Paris') = %s
+                    """, (telegram_id, date_str))
+                else:
+                    # Pour SQLite, approximation avec UTC (peut être ajustée)
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM scores 
+                        WHERE telegram_id = ? 
+                        AND DATE(created_at) = ?
+                    """, (telegram_id, date_str))
+                
+                result = cursor.fetchone()
+                if result:
+                    if isinstance(result, dict):
+                        return int(result['count'] or 0)
+                    else:
+                        return int(result[0]) if result[0] is not None else 0
+                
+                return 0
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur comptage parties quotidiennes: {e}")
+            return 0
+
     def update_display_name(self, telegram_id: int, display_name: str) -> bool:
         """Mettre à jour le nom d'affichage de l'utilisateur"""
         try:
@@ -1255,15 +1296,39 @@ def check_game_access():
                 'message': 'Effectuez un paiement pour jouer'
             }), 403
         
-        # Utilisateur payant - accès autorisé
+        # Vérifier la limite quotidienne de 5 parties en mode compétition
+        import pytz
+        tz_paris = pytz.timezone('Europe/Paris')
+        now_paris = datetime.now(tz_paris)
+        date_str = now_paris.strftime('%Y-%m-%d')
+        
+        daily_games = db.get_daily_games_count(telegram_id, date_str)
+        max_daily_games = 5  # Limite de 5 parties par jour
+        
+        remaining_games = max_daily_games - daily_games
+        limit_reached = remaining_games <= 0
+        
+        if limit_reached:
+            return jsonify({
+                'can_play': False,
+                'mode': mode,
+                'unlimited': False,
+                'daily_games': daily_games,
+                'remaining_games': 0,
+                'limit_reached': True,
+                'error': 'Limite quotidienne atteinte',
+                'message': 'Vous avez atteint votre limite de 5 parties par jour. Revenez demain !'
+            }), 403
+        
+        # Utilisateur payant avec parties restantes
         return jsonify({
             'can_play': True,
             'mode': mode,
             'unlimited': False,
-            'daily_games': 0,
-            'remaining_games': 999,
+            'daily_games': daily_games,
+            'remaining_games': remaining_games,
             'limit_reached': False,
-            'message': 'Accès autorisé - mode compétition'
+            'message': f'Parties restantes aujourd\'hui: {remaining_games}/5'
         })
         
     except Exception as e:
