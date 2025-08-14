@@ -764,6 +764,29 @@ class DatabaseManager:
             logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return False
 
+    def delete_user_data(self, telegram_id: int) -> bool:
+        """Supprimer toutes les données d'un utilisateur (pour les tests)"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Supprimer dans l'ordre : scores, payments, puis users
+                tables = ['scores', 'payments', 'users']
+                
+                for table in tables:
+                    if self.is_postgres:
+                        cursor.execute(f"DELETE FROM {table} WHERE telegram_id = %s", (telegram_id,))
+                    else:
+                        cursor.execute(f"DELETE FROM {table} WHERE telegram_id = ?", (telegram_id,))
+                
+                conn.commit()
+                logger.info(f"🗑️ Données supprimées pour utilisateur {telegram_id}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur suppression utilisateur: {e}")
+            return False
+
     def add_test_payment(self, telegram_id: int) -> bool:
         """Ajouter un paiement de test pour un utilisateur (pour les tests)"""
         try:
@@ -1361,6 +1384,37 @@ def get_leaderboard():
     except Exception as e:
         logger.error(f"❌ Erreur récupération classement: {e}")
         return jsonify({'error': str(e)}), 500
+
+@flask_app.route('/api/delete_user', methods=['DELETE'])
+def delete_user():
+    """Supprimer un utilisateur et toutes ses données (TEMPORAIRE POUR TESTS)"""
+    try:
+        data = request.get_json()
+        telegram_id = data.get('telegram_id')
+        
+        if not telegram_id:
+            return jsonify({'error': 'telegram_id requis'}), 400
+        
+        telegram_id = int(telegram_id)
+        success = db.delete_user_data(telegram_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Utilisateur {telegram_id} supprimé'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Erreur lors de la suppression'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur endpoint delete user: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @flask_app.route('/api/add_test_payment', methods=['POST'])
 def add_test_payment():
