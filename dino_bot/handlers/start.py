@@ -39,8 +39,31 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     
     if text == '🎮 Jouer':
-        from handlers.play import play_handler
-        await play_handler(update, context)
+        # Vérifier d'abord si l'utilisateur a payé
+        try:
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            from app import db
+            
+            user_id = update.effective_user.id
+            has_paid = db.has_valid_payment(user_id)
+            
+            if not has_paid:
+                # Afficher le message de paiement au lieu de lancer le jeu
+                from handlers.payment import payment_handler
+                await payment_handler(update, context)
+                return
+            
+            # Si l'utilisateur a payé, lancer le jeu normalement
+            from handlers.play import play_handler
+            await play_handler(update, context)
+            
+        except Exception as e:
+            print(f"❌ Erreur vérification paiement: {e}")
+            # En cas d'erreur, afficher le message de paiement par sécurité
+            from handlers.payment import payment_handler
+            await payment_handler(update, context)
     elif text == '📊 Classement':
         from handlers.leaderboard import leaderboard_handler
         await leaderboard_handler(update, context)

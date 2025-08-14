@@ -19,15 +19,30 @@ def require_payment(func):
             
             if not has_paid:
                 await update.message.reply_text(
-                    "🚫 Vous devez payer votre mise mensuelle pour participer au concours.\n"
-                    "Utilisez /payment pour effectuer le paiement."
+                    "⚠️ **Accès requis pour le mode compétition**\n\n"
+                    "💰 **Deux options de participation :**\n"
+                    "• 💳 Paiement unique : 0.05 CHF pour le mois en cours\n"
+                    "• 🔄 Abonnement mensuel : 0.05 CHF/mois automatique\n\n"
+                    "✅ **Avantages :**\n"
+                    "• Scores comptabilisés dans le classement\n"
+                    "• Éligibilité aux prix mensuels\n"
+                    "• Accès illimité tout le mois\n\n"
+                    "🆓 **En attendant :** Vous pouvez essayer le mode démo\n\n"
+                    "Pour participer à la cagnotte, utilisez /payment",
+                    parse_mode='Markdown'
                 )
                 return
             
             return await func(update, context)
         except Exception as e:
             print(f"❌ Erreur décorateur payment: {e}")
-            return await func(update, context)  # Continuer en cas d'erreur
+            # En cas d'erreur, afficher le message de paiement par sécurité
+            await update.message.reply_text(
+                "⚠️ **Erreur lors de la vérification du paiement**\n\n"
+                "Pour participer au mode compétition, veuillez utiliser /payment\n"
+                "En attendant, vous pouvez essayer le mode démo."
+            )
+            return
     return wrapper
 
 def require_registration(func):

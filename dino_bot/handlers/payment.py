@@ -1,6 +1,41 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from services.paypal import PayPalService
+
+async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler principal pour afficher les options de paiement"""
+    user_id = update.effective_user.id
+    
+    # Créer les boutons de paiement
+    keyboard = [
+        [InlineKeyboardButton("💳 Paiement unique (0.05 CHF)", url="https://nox-archeo.github.io/dinochallenge/payment?telegram_id=" + str(user_id))],
+        [InlineKeyboardButton("🔄 Abonnement mensuel (0.05 CHF/mois)", url="https://nox-archeo.github.io/dinochallenge/subscription?telegram_id=" + str(user_id))],
+        [InlineKeyboardButton("🆓 Essayer le mode démo", url="https://nox-archeo.github.io/dinochallenge/?telegram_id=" + str(user_id) + "&mode=demo")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    message = """
+⚠️ **Accès requis pour le mode compétition**
+
+💰 **Deux options de participation :**
+• 💳 **Paiement unique** : 0.05 CHF pour le mois en cours
+• 🔄 **Abonnement mensuel** : 0.05 CHF/mois automatique
+
+✅ **Avantages :**
+• Scores comptabilisés dans le classement
+• Éligibilité aux prix mensuels
+• Accès illimité tout le mois
+
+🆓 **En attendant :** Vous pouvez essayer le mode démo
+
+Choisissez votre option ci-dessous :
+"""
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
 
 async def payment_success_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler pour confirmer un paiement réussi"""

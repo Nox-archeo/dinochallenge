@@ -34,7 +34,7 @@ from handlers.profile import (
 from handlers.leaderboard import leaderboard_handler, top_handler
 from handlers.help import help_handler, rules_handler, contact_handler
 from handlers.payment import (
-    payment_success_handler, payment_cancel_handler,
+    payment_handler, payment_success_handler, payment_cancel_handler,
     check_payment_handler, payment_history_handler
 )
 
@@ -93,6 +93,7 @@ class DinoBot:
         app.add_handler(CommandHandler("rules", rules_handler))
         app.add_handler(CommandHandler("contact", contact_handler))
         app.add_handler(CommandHandler("setpaypal", setpaypal_handler))
+        app.add_handler(CommandHandler("payment", payment_handler))
         app.add_handler(CommandHandler("checkpayment", check_payment_handler))
         app.add_handler(CommandHandler("payments", payment_history_handler))
         app.add_handler(CommandHandler("admin_prizes", self._admin_prizes_handler))  # Commande admin
