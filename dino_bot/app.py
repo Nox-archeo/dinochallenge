@@ -979,15 +979,13 @@ async def notify_payment_success(telegram_id: int, amount: Decimal, payment_type
             message += f"🔄 **Type :** Abonnement mensuel automatique\n"
             message += f"📅 **Prochain prélèvement :** {(datetime.now() + timedelta(days=30)).strftime('%d/%m/%Y')}\n\n"
             message += f"🎮 **Accès activé pour le jeu !**\n"
-            message += f"🔗 Jouez ici : {GAME_URL}\n\n"
             message += f"ℹ️ Vous pouvez annuler votre abonnement à tout moment via /cancel_subscription"
         else:
             message = f"✅ **Paiement Confirmé !**\n\n"
             message += f"💰 **Montant :** {amount} CHF\n"
             message += f"📅 **Valable jusqu'au :** {datetime.now().replace(day=1).replace(month=datetime.now().month+1 if datetime.now().month < 12 else 1, year=datetime.now().year+1 if datetime.now().month == 12 else datetime.now().year).strftime('%d/%m/%Y')}\n\n"
             message += f"🎮 **Accès activé pour ce mois !**\n"
-            message += f"🔗 Jouez ici : {GAME_URL}\n\n"
-            message += f"💡 Pour un accès permanent, choisissez l'abonnement mensuel avec /payment"
+            message += f" Pour un accès permanent, choisissez l'abonnement mensuel avec /payment"
         
         await telegram_app.bot.send_message(
             chat_id=telegram_id,
@@ -1005,8 +1003,7 @@ async def notify_subscription_renewal(telegram_id: int, amount: Decimal):
         message += f"💰 **Montant :** {amount} CHF\n"
         message += f"📅 **Période :** {datetime.now().strftime('%B %Y')}\n"
         message += f"📅 **Prochain prélèvement :** {(datetime.now() + timedelta(days=30)).strftime('%d/%m/%Y')}\n\n"
-        message += f"🎮 **Votre accès continue !**\n"
-        message += f"🔗 Jouez ici : {GAME_URL}"
+        message += f"🎮 **Votre accès continue !**"
         
         await telegram_app.bot.send_message(
             chat_id=telegram_id,
@@ -1083,7 +1080,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if has_access:
         message += f"✅ **Vous avez accès ce mois !**\n"
-        message += f"🔗 **Jouez maintenant :** {GAME_URL}"
+        message += f"🎮 **Utilisez le bouton 'Jouer' pour commencer**"
     else:
         message += f"⚠️ **Payez pour participer :** /payment\n"
         message += f"🎮 **Démo gratuite :** {GAME_URL}"
@@ -1134,7 +1131,7 @@ async def profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message += f"\n📊 **Total parties:** {len(user_scores)}\n"
     else:
         message += "🎮 **Aucun score ce mois-ci**\n"
-        message += f"Jouez ici : {GAME_URL}\n"
+        message += "Utilisez le bouton 'Jouer' pour commencer !\n"
     
     await update.message.reply_text(message, parse_mode='Markdown')
 
@@ -1147,7 +1144,7 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if has_access:
         message = f"✅ **Vous avez déjà accès ce mois !**\n\n"
-        message += f"🎮 Jouez ici : {GAME_URL}\n"
+        message += f"🎮 Utilisez le bouton 'Jouer' pour commencer\n"
         message += f"🏆 Consultez le classement avec /leaderboard"
         
         await update.message.reply_text(message, parse_mode='Markdown')

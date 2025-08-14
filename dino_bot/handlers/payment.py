@@ -9,8 +9,7 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Créer les boutons de paiement
     keyboard = [
         [InlineKeyboardButton("💳 Paiement unique (0.05 CHF)", url="https://nox-archeo.github.io/dinochallenge/payment?telegram_id=" + str(user_id))],
-        [InlineKeyboardButton("🔄 Abonnement mensuel (0.05 CHF/mois)", url="https://nox-archeo.github.io/dinochallenge/subscription?telegram_id=" + str(user_id))],
-        [InlineKeyboardButton("🆓 Essayer le mode démo", url="https://nox-archeo.github.io/dinochallenge/?telegram_id=" + str(user_id) + "&mode=demo")]
+        [InlineKeyboardButton("🔄 Abonnement mensuel (0.05 CHF/mois)", url="https://nox-archeo.github.io/dinochallenge/subscription?telegram_id=" + str(user_id))]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -25,8 +24,6 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Scores comptabilisés dans le classement
 • Éligibilité aux prix mensuels
 • Accès illimité tout le mois
-
-🆓 **En attendant :** Vous pouvez essayer le mode démo
 
 Choisissez votre option ci-dessous :
 """
