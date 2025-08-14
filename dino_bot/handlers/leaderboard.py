@@ -25,28 +25,52 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     days_left = days_until_month_end()
     
-🏆 **Classement {month_names[month]} {year}**
+    message = f"🏆 Classement {month_names[month]} {year}\n"
+    message += f"\n💰 Cagnotte totale : {prize_pool:.2f} CHF"
+    message += f"\n⏰ Fin du concours : Dans {days_left} jour(s)"
+    message += f"\n\n🏅 Récompenses :"
+    message += f"\n🥇 1er place : {prizes[1]:.2f} CHF (40%)"
+    message += f"\n🥈 2e place : {prizes[2]:.2f} CHF (15%)"
+    message += f"\n🥉 3e place : {prizes[3]:.2f} CHF (5%)"
+    message += f"\n\n📊 Top 10 :"
 
-💰 **Cagnotte totale :** {prize_pool:.2f} CHF
-⏰ **Fin du concours :** Dans {days_left} jour(s)
+    if not leaderboard:
+        message += "\n❌ Aucun joueur classé ce mois-ci."
+    else:
+        for i, player in enumerate(leaderboard[:10]):
+            marker = " ← VOUS" if player['user_id'] == user_id else ""
+            message += f"\n{i+1}. {player['username']} - {player['score']} pts{marker}"
 
-🏅 **Récompenses :**
-🥇 1er place : {prizes[1]:.2f} CHF (40%)
-🥈 2e place : {prizes[2]:.2f} CHF (15%)
-🥉 3e place : {prizes[3]:.2f} CHF (5%)
+    # Rang et score de l'utilisateur
+    score_manager = game_manager.score_manager
+    user_rank = score_manager.get_user_rank(user_id)
+    user_best = score_manager.get_user_best_score(user_id)
+    if user_rank > 0:
+        message += f"\n\n👤 Votre position : #{user_rank}"
+        message += f"\n🏅 Votre meilleur score : {user_best} pts"
+    elif user_rank == 0:
+        message += f"\n\n👤 Votre position : Non classé"
+        message += f"\n💡 Jouez une partie pour apparaître dans le classement !"
 
-📊 **Top 10 :**
-"""
-    message = (
-        f"🏆 Classement {month_names[month]} {year}\n"
-        f"\n💰 Cagnotte totale : {prize_pool:.2f} CHF"
-        f"\n⏰ Fin du concours : Dans {days_left} jour(s)"
-        f"\n\n🏅 Récompenses :"
-        f"\n🥇 1er place : {prizes[1]:.2f} CHF (40%)"
-        f"\n🥈 2e place : {prizes[2]:.2f} CHF (15%)"
-        f"\n🥉 3e place : {prizes[3]:.2f} CHF (5%)"
-        f"\n\n📊 Top 10 :"
-    )
+    # Statistiques supplémentaires
+    total_players = len(leaderboard)
+    message += f"\n\n📈 Statistiques :"
+    message += f"\n• Joueurs participants : {total_players}"
+    message += f"\n• Votre rang : #{user_rank if user_rank > 0 else 'N/A'}"
+
+    if total_players > 0:
+        avg_score = sum(p['score'] for p in leaderboard) / len(leaderboard)
+        message += f"\n• Score moyen : {avg_score:.1f} pts"
+
+    await update.message.reply_text(message)
+    message = f"🏆 Classement {month_names[month]} {year}\n"
+    message += f"\n💰 Cagnotte totale : {prize_pool:.2f} CHF"
+    message += f"\n⏰ Fin du concours : Dans {days_left} jour(s)"
+    message += f"\n\n🏅 Récompenses :"
+    message += f"\n🥇 1er place : {prizes[1]:.2f} CHF (40%)"
+    message += f"\n🥈 2e place : {prizes[2]:.2f} CHF (15%)"
+    message += f"\n🥉 3e place : {prizes[3]:.2f} CHF (5%)"
+    message += f"\n\n📊 Top 10 :"
     
     if not leaderboard:
         message += "\n❌ Aucun joueur classé ce mois-ci."
@@ -87,7 +111,6 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 @require_registration
 async def top_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler pour afficher seulement le top 3"""
     user_id = update.effective_user.id
     game_manager = GameManager()
     
