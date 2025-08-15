@@ -59,7 +59,7 @@ PAYPAL_MODE = os.getenv('PAYPAL_MODE', 'sandbox')  # 'sandbox' ou 'live'
 PAYPAL_WEBHOOK_URL = 'https://dinochallenge-bot.onrender.com/paypal-webhook'
 
 # Prix en CHF (taxes incluses)
-MONTHLY_PRICE_CHF = Decimal('11.00')
+MONTHLY_PRICE_CHF = Decimal('0.05')  # Prix de test - prix final sera 11.00 CHF
 
 # Configuration PayPal SDK
 if PAYPAL_CLIENT_ID and PAYPAL_SECRET_KEY:
@@ -1024,7 +1024,7 @@ async def notify_new_score(telegram_id: int, score: int):
             message = f"🎮 **Score enregistré !**\n\n"
             message += f"📊 **Score :** {score:,} points\n\n"
             message += f"⚠️ **Accès limité** - Pour participer au concours mensuel :\n"
-            message += f"💰 Payez 11 CHF avec /payment\n"
+            message += f"💰 Payez 0.05 CHF avec /payment (test - final: 11 CHF)\n"
             message += f"🏆 Tentez de gagner les prix mensuels !"
         else:
             message = f"🎮 **Nouveau score enregistré !**\n\n"
@@ -1061,14 +1061,14 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎮 **Le jeu Chrome Dino avec des vrais prix !**
 🏆 Concours mensuel avec redistribution des gains
 
-💰 **Participation : 11 CHF**
+💰 **Participation : 0.05 CHF** (prix de test - final: 11 CHF)
 • Paiement unique pour le mois en cours
 • OU abonnement mensuel automatique
 
 🥇 **Prix mensuels distribués au top 3 :**
-• 1er place : 50% de la cagnotte
-• 2e place : 30% de la cagnotte  
-• 3e place : 20% de la cagnotte
+• 1er place : 40% de la cagnotte
+• 2e place : 15% de la cagnotte  
+• 3e place : 5% de la cagnotte
 
 📋 **Commandes principales :**
 /payment - 💰 Participer au concours
@@ -1085,7 +1085,15 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message += f"⚠️ **Payez pour participer :** /payment\n"
         message += f"🎮 **Démo gratuite :** {GAME_URL}"
     
-    await update.message.reply_text(message, parse_mode='Markdown')
+    # Ajouter des boutons d'aide et d'information
+    keyboard = [
+        [InlineKeyboardButton("❓ Comment jouer ?", callback_data="help_game")],
+        [InlineKeyboardButton("📋 Règles du concours", callback_data="help_rules")],
+        [InlineKeyboardButton("🏆 Voir le classement", callback_data="show_leaderboard")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
 
 # leaderboard_handler supprimé - utilise maintenant handlers/leaderboard.py
 
@@ -1213,6 +1221,15 @@ async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT
             message += "✅ Une fois configuré, votre accès sera activé automatiquement !"
             
             await query.edit_message_text(message)
+        
+        elif data == "help_game":
+            await help_game_callback(update, context)
+            
+        elif data == "help_rules":
+            await help_rules_callback(update, context)
+            
+        elif data == "show_leaderboard":
+            await show_leaderboard_callback(update, context)
     
     except Exception as e:
         logger.error(f"❌ Erreur callback query: {e}")
@@ -1240,36 +1257,160 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Afficher l'aide"""
     message = """❓ **AIDE - DINO CHALLENGE**
 
-🎮 **Comment jouer :**
-1. Payez 11 CHF avec /payment pour participer
-2. Cliquez sur le lien du jeu
-3. Utilisez ESPACE ou FLÈCHE HAUT pour sauter
-4. Évitez les obstacles le plus longtemps possible
-5. Votre score est automatiquement enregistré
+🦕 **QU'EST-CE QUE LE JEU T-REX RUNNER ?**
+Le jeu du dinosaure de Google Chrome ! Votre T-Rex court automatiquement dans le désert et vous devez éviter les obstacles.
 
-💰 **Options de paiement :**
-• **Paiement unique :** Accès pour le mois en cours
-• **Abonnement :** Accès permanent avec renouvellement automatique
+🎮 **COMMENT JOUER :**
 
-🏆 **Concours mensuel :**
+**🕹️ Contrôles :**
+• **ESPACE** ou **FLÈCHE HAUT** : Faire sauter le dinosaure
+• **FLÈCHE BAS** : Se baisser (pour éviter les ptérodactyles)
+• Le dinosaure court automatiquement, de plus en plus vite !
+
+**🌵 Obstacles à éviter :**
+• **Cactus** (petits et grands) : Sautez par-dessus
+• **Ptérodactyles** (oiseaux volants) : Sautez ou baissez-vous selon leur hauteur
+• La vitesse augmente progressivement, rendant le jeu plus difficile
+
+**📊 Système de points :**
+• +1 point chaque fois que vous passez un obstacle
+• Plus vous survivez longtemps, plus votre score est élevé
+• Le jeu devient de plus en plus rapide et difficile
+
+💰 **PARTICIPATION AU CONCOURS :**
+1. Payez 0.05 CHF avec /payment (test - final: 11 CHF)
+2. Cliquez sur le lien du jeu personnalisé
+3. Jouez autant de fois que vous voulez
+4. Votre MEILLEUR score du mois compte pour le classement
+5. Seuls les participants payants peuvent soumettre des scores
+
+🏆 **CONCOURS MENSUEL :**
 Prix distribués au top 3 de chaque mois :
-• 🥇 1er : 50% de la cagnotte
-• 🥈 2e : 30% de la cagnotte  
-• 🥉 3e : 20% de la cagnotte
+• 🥇 1er : 40% de la cagnotte totale
+• 🥈 2e : 15% de la cagnotte totale
+• 🥉 3e : 5% de la cagnotte totale
 
-📋 **Commandes :**
+� **STRATÉGIES POUR BIEN JOUER :**
+• Concentrez-vous sur le rythme, ne paniquez pas
+• Anticipez les obstacles qui arrivent
+• Les ptérodactyles volent à différentes hauteurs
+• Entraînez-vous ! Vous pouvez jouer autant que vous voulez
+
+📋 **COMMANDES UTILES :**
 /start - Menu principal
-/payment - Participer au concours
-/leaderboard - Classement mensuel
-/profile - Mon profil et statistiques
-/cancel_subscription - Annuler l'abonnement
+/payment - Participer au concours  
+/leaderboard - Voir le classement
+/profile - Vos statistiques
 /help - Cette aide
 
-🎯 **Support :**
-Contactez l'organisateur pour toute question.
+🎯 **BESOIN D'AIDE ?**
+Contactez l'organisateur pour toute question sur le jeu ou le concours.
 """
     
     await update.message.reply_text(message, parse_mode='Markdown')
+
+async def help_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Afficher l'aide sur le gameplay via callback"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = """🎮 **COMMENT JOUER AU T-REX RUNNER**
+
+🦕 **Le jeu :**
+C'est le célèbre jeu du dinosaure de Google Chrome ! Votre T-Rex court automatiquement dans le désert.
+
+**🕹️ Contrôles :**
+• **ESPACE** ou **FLÈCHE HAUT** : Faire sauter le dinosaure
+• **FLÈCHE BAS** : Se baisser (pour éviter les ptérodactyles)
+
+**🌵 Obstacles :**
+• **Cactus** (petits et grands) : Sautez par-dessus
+• **Ptérodactyles** : Sautez ou baissez-vous selon leur hauteur
+• La vitesse augmente progressivement !
+
+**📊 Points :**
+• +1 point par obstacle évité
+• Plus vous survivez longtemps, plus votre score est élevé
+• Votre MEILLEUR score du mois compte pour le concours
+
+💡 **Astuces :**
+• Gardez le rythme, ne paniquez pas
+• Anticipez les obstacles
+• Entraînez-vous autant que vous voulez !
+"""
+    
+    await query.edit_message_text(message, parse_mode='Markdown')
+
+async def help_rules_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Afficher les règles du concours via callback"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = """📋 **RÈGLES DU CONCOURS DINO CHALLENGE**
+
+💰 **Participation :**
+• Coût : 0.05 CHF pour participer au mois en cours
+• Paiement unique OU abonnement mensuel automatique
+• Seuls les participants payants peuvent soumettre des scores
+
+🎮 **Comment participer :**
+1. Payez avec /payment
+2. Recevez votre lien de jeu personnalisé
+3. Jouez autant de fois que vous voulez
+4. Votre MEILLEUR score du mois compte
+
+🏆 **Prix mensuels :**
+La cagnotte totale est redistribuée au top 3 :
+• 🥇 **1er place :** 40% de la cagnotte
+• 🥈 **2e place :** 15% de la cagnotte
+• 🥉 **3e place :** 5% de la cagnotte
+
+📅 **Cycle mensuel :**
+• Nouveau concours chaque mois
+• Classement remis à zéro le 1er de chaque mois
+• Paiements calculés automatiquement fin de mois
+
+⚖️ **Règles importantes :**
+• Un seul compte par personne
+• Pas de triche ou manipulation
+• Scores vérifiés automatiquement
+• Décisions de l'organisateur finales
+
+💳 **Paiements :**
+• Via PayPal sécurisé
+• Accès immédiat après paiement
+• Remboursement possible avant premier jeu
+"""
+    
+    await query.edit_message_text(message, parse_mode='Markdown')
+
+async def show_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Afficher le classement via callback"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Réutiliser la logique du leaderboard existant
+    current_month = datetime.now().strftime('%Y-%m')
+    leaderboard = db.get_leaderboard(current_month)
+    
+    if not leaderboard:
+        message = f"🏆 **CLASSEMENT {current_month}**\n\n"
+        message += "Aucun score enregistré ce mois-ci.\n"
+        message += "Soyez le premier à participer ! 🎮"
+    else:
+        message = f"🏆 **CLASSEMENT {current_month}**\n\n"
+        
+        for i, player in enumerate(leaderboard, 1):
+            emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+            username = player['username'] or player['first_name'] or "Anonyme"
+            score = player['best_score']
+            games = player['total_games']
+            
+            message += f"{emoji} **{username}** - {score} pts ({games} parties)\n"
+        
+        message += f"\n💰 Cagnotte actuelle : {len(leaderboard) * 0.05:.2f} CHF"
+    
+    await query.edit_message_text(message, parse_mode='Markdown')
 
 async def setup_bot_commands():
     """Configurer les commandes du bot"""
