@@ -974,17 +974,17 @@ async def notify_payment_success(telegram_id: int, amount: Decimal, payment_type
     """Notifier le succès d'un paiement"""
     try:
         if payment_type == 'abonnement':
-            message = f"✅ **Abonnement Activé !**\n\n"
-            message += f"💰 **Montant :** {amount} CHF/mois\n"
-            message += f"🔄 **Type :** Abonnement mensuel automatique\n"
-            message += f"📅 **Prochain prélèvement :** {(datetime.now() + timedelta(days=30)).strftime('%d/%m/%Y')}\n\n"
-            message += f"🎮 **Accès activé pour le jeu !**\n"
+            message = f"✅ Abonnement Activé !\n\n"
+            message += f"💰 Montant : {amount} CHF/mois\n"
+            message += f"🔄 Type : Abonnement mensuel automatique\n"
+            message += f"📅 Prochain prélèvement : {(datetime.now() + timedelta(days=30)).strftime('%d/%m/%Y')}\n\n"
+            message += f"🎮 Accès activé pour le jeu !\n"
             message += f"ℹ️ Vous pouvez annuler votre abonnement à tout moment via /cancel_subscription"
         else:
-            message = f"✅ **Paiement Confirmé !**\n\n"
-            message += f"💰 **Montant :** {amount} CHF\n"
-            message += f"📅 **Valable jusqu'au :** {datetime.now().replace(day=1).replace(month=datetime.now().month+1 if datetime.now().month < 12 else 1, year=datetime.now().year+1 if datetime.now().month == 12 else datetime.now().year).strftime('%d/%m/%Y')}\n\n"
-            message += f"🎮 **Accès activé pour ce mois !**\n"
+            message = f"✅ Paiement Confirmé !\n\n"
+            message += f"💰 Montant : {amount} CHF\n"
+            message += f"📅 Valable jusqu'au : {datetime.now().replace(day=1).replace(month=datetime.now().month+1 if datetime.now().month < 12 else 1, year=datetime.now().year+1 if datetime.now().month == 12 else datetime.now().year).strftime('%d/%m/%Y')}\n\n"
+            message += f"🎮 Accès activé pour ce mois !\n"
             message += f" Pour un accès permanent, choisissez l'abonnement mensuel avec /payment"
         
         await telegram_app.bot.send_message(
@@ -999,11 +999,11 @@ async def notify_payment_success(telegram_id: int, amount: Decimal, payment_type
 async def notify_subscription_renewal(telegram_id: int, amount: Decimal):
     """Notifier le renouvellement d'abonnement"""
     try:
-        message = f"🔄 **Abonnement Renouvelé !**\n\n"
-        message += f"💰 **Montant :** {amount} CHF\n"
-        message += f"📅 **Période :** {datetime.now().strftime('%B %Y')}\n"
-        message += f"📅 **Prochain prélèvement :** {(datetime.now() + timedelta(days=30)).strftime('%d/%m/%Y')}\n\n"
-        message += f"🎮 **Votre accès continue !**"
+        message = f"🔄 Abonnement Renouvelé !\n\n"
+        message += f"💰 Montant : {amount} CHF\n"
+        message += f"📅 Période : {datetime.now().strftime('%B %Y')}\n"
+        message += f"📅 Prochain prélèvement : {(datetime.now() + timedelta(days=30)).strftime('%d/%m/%Y')}\n\n"
+        message += f"🎮 Votre accès continue !"
         
         await telegram_app.bot.send_message(
             chat_id=telegram_id,
@@ -1021,15 +1021,15 @@ async def notify_new_score(telegram_id: int, score: int):
         has_access = db.check_user_access(telegram_id)
         
         if not has_access:
-            message = f"🎮 **Score enregistré !**\n\n"
-            message += f"📊 **Score :** {score:,} points\n\n"
-            message += f"⚠️ **Accès limité** - Pour participer au concours mensuel :\n"
+            message = f"🎮 Score enregistré !\n\n"
+            message += f"📊 Score : {score:,} points\n\n"
+            message += f"⚠️ Accès limité - Pour participer au concours mensuel :\n"
             message += f"💰 Payez 0.05 CHF avec /payment (test - final: 11 CHF)\n"
             message += f"🏆 Tentez de gagner les prix mensuels !"
         else:
-            message = f"🎮 **Nouveau score enregistré !**\n\n"
-            message += f"📊 **Score :** {score:,} points\n"
-            message += f"🕒 **Enregistré le :** {datetime.now().strftime('%d/%m/%Y à %H:%M')}\n\n"
+            message = f"🎮 Nouveau score enregistré !\n\n"
+            message += f"📊 Score : {score:,} points\n"
+            message += f"🕒 Enregistré le : {datetime.now().strftime('%d/%m/%Y à %H:%M')}\n\n"
             message += f"🏆 Tapez /leaderboard pour voir le classement !"
         
         await telegram_app.bot.send_message(
@@ -1054,23 +1054,23 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Vérifier l'accès
     has_access = db.check_user_access(user.id)
     
-    message = f"""🦕 **Bienvenue dans le Dino Challenge !**
+    message = f"""🦕 Bienvenue dans le Dino Challenge !
 
 👋 Salut {user.first_name} !
 
-🎮 **Le jeu Chrome Dino avec des vrais prix !**
+🎮 Le jeu Chrome Dino avec des vrais prix !
 🏆 Concours mensuel avec redistribution des gains
 
-💰 **Participation : 0.05 CHF** (prix de test - final: 11 CHF)
+💰 Participation : 0.05 CHF (prix de test - final: 11 CHF)
 • Paiement unique pour le mois en cours
 • OU abonnement mensuel automatique
 
-🥇 **Prix mensuels distribués au top 3 :**
+🥇 Prix mensuels distribués au top 3 :
 • 1er place : 40% de la cagnotte
 • 2e place : 15% de la cagnotte  
 • 3e place : 5% de la cagnotte
 
-📋 **Commandes principales :**
+📋 Commandes principales :
 /payment - 💰 Participer au concours
 /leaderboard - 🏆 Voir le classement
 /profile - 👤 Mon profil
@@ -1079,11 +1079,11 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 """
     
     if has_access:
-        message += f"✅ **Vous avez accès ce mois !**\n"
-        message += f"🎮 **Utilisez le bouton 'Jouer' pour commencer**"
+        message += f"✅ Vous avez accès ce mois !\n"
+        message += f"🎮 Utilisez le bouton 'Jouer' pour commencer"
     else:
-        message += f"⚠️ **Payez pour participer :** /payment\n"
-        message += f"🎮 **Démo gratuite :** {GAME_URL}"
+        message += f"⚠️ Payez pour participer : /payment\n"
+        message += f"🎮 Démo gratuite : {GAME_URL}"
     
     # Ajouter des boutons d'aide et d'information
     keyboard = [
@@ -1126,19 +1126,19 @@ async def profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"❌ Erreur récupération profil: {e}")
     
-    message = f"👤 **PROFIL - {user.first_name}**\n\n"
-    message += f"🆔 **ID Telegram:** {user.id}\n"
-    message += f"📧 **Email:** {db_user.get('email', 'Non configuré')}\n"
-    message += f"📅 **Inscription:** {db_user.get('registration_date', 'Inconnue')}\n\n"
+    message = f"👤 PROFIL - {user.first_name}\n\n"
+    message += f"🆔 ID Telegram: {user.id}\n"
+    message += f"📧 Email: {db_user.get('email', 'Non configuré')}\n"
+    message += f"📅 Inscription: {db_user.get('registration_date', 'Inconnue')}\n\n"
     
     if user_scores:
-        message += f"🏆 **TOP 5 DE VOS SCORES CE MOIS:**\n"
+        message += f"🏆 TOP 5 DE VOS SCORES CE MOIS:\n"
         for i, score_data in enumerate(user_scores, 1):
             score = dict(score_data)['score']
             message += f"   {i}. {score:,} points\n"
-        message += f"\n📊 **Total parties:** {len(user_scores)}\n"
+        message += f"\n📊 Total parties: {len(user_scores)}\n"
     else:
-        message += "🎮 **Aucun score ce mois-ci**\n"
+        message += "🎮 Aucun score ce mois-ci\n"
         message += "Utilisez le bouton 'Jouer' pour commencer !\n"
     
     await update.message.reply_text(message, parse_mode='Markdown')
@@ -1151,7 +1151,7 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_access = db.check_user_access(user.id)
     
     if has_access:
-        message = f"✅ **Vous avez déjà accès ce mois !**\n\n"
+        message = f"✅ Vous avez déjà accès ce mois !\n\n"
         message += f"🎮 Utilisez le bouton 'Jouer' pour commencer\n"
         message += f"🏆 Consultez le classement avec /leaderboard"
         
@@ -1242,98 +1242,98 @@ async def cancel_subscription_handler(update: Update, context: ContextTypes.DEFA
     """Annuler l'abonnement PayPal"""
     user = update.effective_user
     
-    message = f"🔄 **Gestion de l'abonnement**\n\n"
+    message = f"🔄 Gestion de l'abonnement\n\n"
     message += f"Pour annuler votre abonnement PayPal :\n\n"
     message += f"1. Connectez-vous à votre compte PayPal\n"
     message += f"2. Allez dans 'Paiements' → 'Abonnements'\n"
     message += f"3. Trouvez 'Dino Challenge'\n"
     message += f"4. Cliquez sur 'Annuler l'abonnement'\n\n"
-    message += f"📞 **Besoin d'aide ?** Contactez l'organisateur.\n"
+    message += f"📞 Besoin d'aide ? Contactez l'organisateur.\n"
     message += f"⚠️ L'accès reste valide jusqu'à la fin de la période payée."
     
     await update.message.reply_text(message, parse_mode='Markdown')
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Afficher l'aide"""
-    message = """❓ **AIDE - DINO CHALLENGE**
+    message = """❓ AIDE - DINO CHALLENGE
 
-🦕 **QU'EST-CE QUE LE JEU T-REX RUNNER ?**
+🦕 QU'EST-CE QUE LE JEU T-REX RUNNER ?
 Le jeu du dinosaure de Google Chrome ! Votre T-Rex court automatiquement dans le désert et vous devez éviter les obstacles.
 
-🎮 **COMMENT JOUER :**
+🎮 COMMENT JOUER :
 
-**🕹️ Contrôles :**
-• **ESPACE** ou **FLÈCHE HAUT** : Faire sauter le dinosaure
-• **FLÈCHE BAS** : Se baisser (pour éviter les ptérodactyles)
+🕹️ Contrôles :
+• ESPACE ou FLÈCHE HAUT : Faire sauter le dinosaure
+• FLÈCHE BAS : Se baisser (pour éviter les ptérodactyles)
 • Le dinosaure court automatiquement, de plus en plus vite !
 
-**🌵 Obstacles à éviter :**
-• **Cactus** (petits et grands) : Sautez par-dessus
-• **Ptérodactyles** (oiseaux volants) : Sautez ou baissez-vous selon leur hauteur
+🌵 Obstacles à éviter :
+• Cactus (petits et grands) : Sautez par-dessus
+• Ptérodactyles (oiseaux volants) : Sautez ou baissez-vous selon leur hauteur
 • La vitesse augmente progressivement, rendant le jeu plus difficile
 
-**📊 Système de points :**
+📊 Système de points :
 • +1 point chaque fois que vous passez un obstacle
 • Plus vous survivez longtemps, plus votre score est élevé
 • Le jeu devient de plus en plus rapide et difficile
 
-💰 **PARTICIPATION AU CONCOURS :**
+💰 PARTICIPATION AU CONCOURS :
 1. Payez 0.05 CHF avec /payment (test - final: 11 CHF)
 2. Cliquez sur le lien du jeu personnalisé
 3. Jouez autant de fois que vous voulez
 4. Votre MEILLEUR score du mois compte pour le classement
 5. Seuls les participants payants peuvent soumettre des scores
 
-🏆 **CONCOURS MENSUEL :**
+🏆 CONCOURS MENSUEL :
 Prix distribués au top 3 de chaque mois :
 • 🥇 1er : 40% de la cagnotte totale
 • 🥈 2e : 15% de la cagnotte totale
 • 🥉 3e : 5% de la cagnotte totale
 
-� **STRATÉGIES POUR BIEN JOUER :**
+💡 STRATÉGIES POUR BIEN JOUER :
 • Concentrez-vous sur le rythme, ne paniquez pas
 • Anticipez les obstacles qui arrivent
 • Les ptérodactyles volent à différentes hauteurs
 • Entraînez-vous ! Vous pouvez jouer autant que vous voulez
 
-📋 **COMMANDES UTILES :**
+📋 COMMANDES UTILES :
 /start - Menu principal
 /payment - Participer au concours  
 /leaderboard - Voir le classement
 /profile - Vos statistiques
 /help - Cette aide
 
-🎯 **BESOIN D'AIDE ?**
+🎯 BESOIN D'AIDE ?
 Contactez l'organisateur pour toute question sur le jeu ou le concours.
 """
     
-    await update.message.reply_text(message, parse_mode='Markdown')
+    await update.message.reply_text(message)
 
 async def help_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Afficher l'aide sur le gameplay via callback"""
     query = update.callback_query
     await query.answer()
     
-    message = """🎮 **COMMENT JOUER AU T-REX RUNNER**
+    message = """🎮 COMMENT JOUER AU T-REX RUNNER
 
-🦕 **Le jeu :**
+🦕 Le jeu :
 C'est le célèbre jeu du dinosaure de Google Chrome ! Votre T-Rex court automatiquement dans le désert.
 
-**🕹️ Contrôles :**
-• **ESPACE** ou **FLÈCHE HAUT** : Faire sauter le dinosaure
-• **FLÈCHE BAS** : Se baisser (pour éviter les ptérodactyles)
+🕹️ Contrôles :
+• ESPACE ou FLÈCHE HAUT : Faire sauter le dinosaure
+• FLÈCHE BAS : Se baisser (pour éviter les ptérodactyles)
 
-**🌵 Obstacles :**
-• **Cactus** (petits et grands) : Sautez par-dessus
-• **Ptérodactyles** : Sautez ou baissez-vous selon leur hauteur
+🌵 Obstacles :
+• Cactus (petits et grands) : Sautez par-dessus
+• Ptérodactyles : Sautez ou baissez-vous selon leur hauteur
 • La vitesse augmente progressivement !
 
-**📊 Points :**
+📊 Points :
 • +1 point par obstacle évité
 • Plus vous survivez longtemps, plus votre score est élevé
 • Votre MEILLEUR score du mois compte pour le concours
 
-💡 **Astuces :**
+💡 Astuces :
 • Gardez le rythme, ne paniquez pas
 • Anticipez les obstacles
 • Entraînez-vous autant que vous voulez !
@@ -1346,37 +1346,37 @@ async def help_rules_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
     
-    message = """📋 **RÈGLES DU CONCOURS DINO CHALLENGE**
+    message = """📋 RÈGLES DU CONCOURS DINO CHALLENGE
 
-💰 **Participation :**
+💰 Participation :
 • Coût : 0.05 CHF pour participer au mois en cours
 • Paiement unique OU abonnement mensuel automatique
 • Seuls les participants payants peuvent soumettre des scores
 
-🎮 **Comment participer :**
+🎮 Comment participer :
 1. Payez avec /payment
 2. Recevez votre lien de jeu personnalisé
 3. Jouez autant de fois que vous voulez
 4. Votre MEILLEUR score du mois compte
 
-🏆 **Prix mensuels :**
+🏆 Prix mensuels :
 La cagnotte totale est redistribuée au top 3 :
-• 🥇 **1er place :** 40% de la cagnotte
-• 🥈 **2e place :** 15% de la cagnotte
-• 🥉 **3e place :** 5% de la cagnotte
+• 🥇 1er place : 40% de la cagnotte
+• 🥈 2e place : 15% de la cagnotte
+• 🥉 3e place : 5% de la cagnotte
 
-📅 **Cycle mensuel :**
+📅 Cycle mensuel :
 • Nouveau concours chaque mois
 • Classement remis à zéro le 1er de chaque mois
 • Paiements calculés automatiquement fin de mois
 
-⚖️ **Règles importantes :**
+⚖️ Règles importantes :
 • Un seul compte par personne
 • Pas de triche ou manipulation
 • Scores vérifiés automatiquement
 • Décisions de l'organisateur finales
 
-💳 **Paiements :**
+💳 Paiements :
 • Via PayPal sécurisé
 • Accès immédiat après paiement
 • Remboursement possible avant premier jeu
@@ -1394,11 +1394,11 @@ async def show_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
     leaderboard = db.get_leaderboard(current_month)
     
     if not leaderboard:
-        message = f"🏆 **CLASSEMENT {current_month}**\n\n"
+        message = f"🏆 CLASSEMENT {current_month}\n\n"
         message += "Aucun score enregistré ce mois-ci.\n"
         message += "Soyez le premier à participer ! 🎮"
     else:
-        message = f"🏆 **CLASSEMENT {current_month}**\n\n"
+        message = f"🏆 CLASSEMENT {current_month}\n\n"
         
         for i, player in enumerate(leaderboard, 1):
             emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
@@ -1406,7 +1406,7 @@ async def show_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
             score = player['best_score']
             games = player['total_games']
             
-            message += f"{emoji} **{username}** - {score} pts ({games} parties)\n"
+            message += f"{emoji} {username} - {score} pts ({games} parties)\n"
         
         message += f"\n💰 Cagnotte actuelle : {len(leaderboard) * 0.05:.2f} CHF"
     
@@ -1441,7 +1441,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             
             if user:
                 await update.message.reply_text(
-                    f"✅ **Profil configuré !**\n\n"
+                    f"✅ Profil configuré !\n\n"
                     f"👤 Nom : `{text}`\n\n"
                     f"Vous pouvez maintenant utiliser /start pour accéder au menu principal !",
                     parse_mode='Markdown'
