@@ -1205,19 +1205,14 @@ async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT
             telegram_id = int(data.replace("pay_subscription_", ""))
             subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription?telegram_id={telegram_id}"
             
-            # Message ultra-simple pour test - VERSION 2025-08-15-08:00
-            message = f"Abonnement mensuel 0.05 CHF\n\nLien: {subscription_url}\n\nVersion: 2025-08-15-08:00"
+            # COPIE EXACTE du format du paiement unique qui fonctionne
+            message = "🔄 Abonnement Mensuel - 0.05 CHF/mois\n\n"
+            message += "🔗 Cliquez sur le lien ci-dessous pour vous abonner :\n\n"
+            message += f"{subscription_url}\n\n"
+            message += "📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
+            message += "✅ Une fois configuré, votre accès sera activé automatiquement !"
             
-            logger.info(f"🔧 DEBUG VERSION 2025-08-15-08:00 - Callback: {data}")
-            logger.info(f"🔧 DEBUG VERSION 2025-08-15-08:00 - Message: {message}")
-            
-            try:
-                await query.edit_message_text(message)
-                logger.info("✅ SUCCESS VERSION 2025-08-15-08:00")
-            except Exception as e:
-                logger.error(f"❌ ERROR VERSION 2025-08-15-08:00: {e}")
-                # Fallback ultra-simple
-                await query.edit_message_text(f"Abonnement: {subscription_url}")
+            await query.edit_message_text(message)
     
     except Exception as e:
         logger.error(f"❌ Erreur callback query: {e}")
