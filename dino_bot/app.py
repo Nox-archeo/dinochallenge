@@ -1251,57 +1251,27 @@ async def cancel_subscription_handler(update: Update, context: ContextTypes.DEFA
     await update.message.reply_text(message)
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Afficher l'aide"""
-    message = """❓ AIDE - DINO CHALLENGE
+    """Afficher l'aide - VERSION ULTRA SIMPLE"""
+    message = """AIDE - DINO CHALLENGE
 
-🦕 QU'EST-CE QUE LE JEU T-REX RUNNER ?
-Le jeu du dinosaure de Google Chrome ! Votre T-Rex court automatiquement dans le désert et vous devez éviter les obstacles.
+COMMENT JOUER :
+- Utilisez ESPACE pour faire sauter le dinosaure
+- Utilisez FLECHE BAS pour vous baisser
+- Evitez les cactus et les oiseaux
+- Plus vous survivez longtemps, plus votre score est eleve
 
-🎮 COMMENT JOUER :
+CONCOURS :
+- Payez 0.05 CHF pour participer
+- Votre meilleur score du mois compte
+- Prix distribues au top 3 : 40%, 15%, 5%
 
-🕹️ Contrôles :
-• ESPACE ou FLÈCHE HAUT : Faire sauter le dinosaure
-• FLÈCHE BAS : Se baisser (pour éviter les ptérodactyles)
-• Le dinosaure court automatiquement, de plus en plus vite !
-
-🌵 Obstacles à éviter :
-• Cactus (petits et grands) : Sautez par-dessus
-• Ptérodactyles (oiseaux volants) : Sautez ou baissez-vous selon leur hauteur
-• La vitesse augmente progressivement, rendant le jeu plus difficile
-
-📊 Système de points :
-• +1 point chaque fois que vous passez un obstacle
-• Plus vous survivez longtemps, plus votre score est élevé
-• Le jeu devient de plus en plus rapide et difficile
-
-💰 PARTICIPATION AU CONCOURS :
-1. Payez 0.05 CHF avec /payment (test - final: 11 CHF)
-2. Cliquez sur le lien du jeu personnalisé
-3. Jouez autant de fois que vous voulez
-4. Votre MEILLEUR score du mois compte pour le classement
-5. Seuls les participants payants peuvent soumettre des scores
-
-🏆 CONCOURS MENSUEL :
-Prix distribués au top 3 de chaque mois :
-• 🥇 1er : 40% de la cagnotte totale
-• 🥈 2e : 15% de la cagnotte totale
-• 🥉 3e : 5% de la cagnotte totale
-
-💡 STRATÉGIES POUR BIEN JOUER :
-• Concentrez-vous sur le rythme, ne paniquez pas
-• Anticipez les obstacles qui arrivent
-• Les ptérodactyles volent à différentes hauteurs
-• Entraînez-vous ! Vous pouvez jouer autant que vous voulez
-
-📋 COMMANDES UTILES :
+COMMANDES :
 /start - Menu principal
-/payment - Participer au concours  
-/leaderboard - Voir le classement
-/profile - Vos statistiques
+/payment - Participer
+/leaderboard - Classement
 /help - Cette aide
 
-🎯 BESOIN D'AIDE ?
-Contactez l'organisateur pour toute question sur le jeu ou le concours.
+Pour toute question, contactez l'organisateur.
 """
     
     await update.message.reply_text(message)
