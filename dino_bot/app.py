@@ -1082,15 +1082,15 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message += f"⚠️ Payez pour participer : /payment\n"
         message += f"🎮 Démo gratuite : {GAME_URL}"
     
-    # Ajouter des boutons d'aide et d'information
-    keyboard = [
-        [InlineKeyboardButton("❓ Comment jouer ?", callback_data="help_game")],
-        [InlineKeyboardButton("📋 Règles du concours", callback_data="help_rules")],
-        [InlineKeyboardButton("🏆 Voir le classement", callback_data="show_leaderboard")]
-    ]
+    # TEMPORAIRE: Suppression des boutons pour tester
+    # keyboard = [
+    #     [InlineKeyboardButton("❓ Comment jouer ?", callback_data="help_game")],
+    #     [InlineKeyboardButton("📋 Règles du concours", callback_data="help_rules")],
+    #     [InlineKeyboardButton("🏆 Voir le classement", callback_data="show_leaderboard")]
+    # ]
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(message, reply_markup=reply_markup)
+    # reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(message)
 
 # leaderboard_handler supprimé - utilise maintenant handlers/leaderboard.py
 
