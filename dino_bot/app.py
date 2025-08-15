@@ -1205,16 +1205,25 @@ async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT
             telegram_id = int(data.replace("pay_subscription_", ""))
             subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription?telegram_id={telegram_id}"
             
-            message = "🔄 Abonnement Mensuel - 0.05 CHF/mois\n\n"
-            message += "🔗 Cliquez sur le lien ci-dessous pour vous abonner :\n\n"
+            # Message ultra-simple pour éviter tout problème de parsing
+            message = "Abonnement Mensuel - 0.05 CHF/mois\n\n"
+            message += "Lien de paiement :\n"
             message += f"{subscription_url}\n\n"
-            message += "📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
-            message += "✅ Accès permanent avec renouvellement automatique !\n"
-            message += "❌ Annulable à tout moment avec /cancel_subscription"
+            message += "Redirection vers PayPal pour configurer l'abonnement.\n"
+            message += "Acces permanent avec renouvellement automatique.\n"
+            message += "Annulable depuis votre compte PayPal."
             
             logger.info(f"🔧 Debug - Message abonnement (longueur: {len(message)})")
-            await query.edit_message_text(message)
-            logger.info("✅ Message abonnement envoyé avec succès")
+            logger.info(f"🔧 Debug - Contenu message: {repr(message)}")
+            
+            try:
+                await query.edit_message_text(message)
+                logger.info("✅ Message abonnement envoyé avec succès")
+            except Exception as e:
+                logger.error(f"❌ Erreur edit_message_text abonnement: {e}")
+                # Essayer avec un message encore plus simple
+                simple_message = f"Abonnement 0.05 CHF/mois\n{subscription_url}"
+                await query.edit_message_text(simple_message)
     
     except Exception as e:
         logger.error(f"❌ Erreur callback query: {e}")
