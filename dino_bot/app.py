@@ -990,7 +990,6 @@ async def notify_payment_success(telegram_id: int, amount: Decimal, payment_type
         await telegram_app.bot.send_message(
             chat_id=telegram_id,
             text=message,
-            parse_mode='Markdown'
         )
         
     except Exception as e:
@@ -1008,7 +1007,6 @@ async def notify_subscription_renewal(telegram_id: int, amount: Decimal):
         await telegram_app.bot.send_message(
             chat_id=telegram_id,
             text=message,
-            parse_mode='Markdown'
         )
         
     except Exception as e:
@@ -1035,7 +1033,6 @@ async def notify_new_score(telegram_id: int, score: int):
         await telegram_app.bot.send_message(
             chat_id=telegram_id,
             text=message,
-            parse_mode='Markdown'
         )
     except Exception as e:
         logger.error(f"❌ Erreur notification score: {e}")
@@ -1093,7 +1090,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
+    await update.message.reply_text(message, reply_markup=reply_markup)
 
 # leaderboard_handler supprimé - utilise maintenant handlers/leaderboard.py
 
@@ -1141,7 +1138,7 @@ async def profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message += "🎮 Aucun score ce mois-ci\n"
         message += "Utilisez le bouton 'Jouer' pour commencer !\n"
     
-    await update.message.reply_text(message, parse_mode='Markdown')
+    await update.message.reply_text(message)
 
 async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestionnaire pour les paiements"""
@@ -1155,7 +1152,7 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message += f"🎮 Utilisez le bouton 'Jouer' pour commencer\n"
         message += f"🏆 Consultez le classement avec /leaderboard"
         
-        await update.message.reply_text(message, parse_mode='Markdown')
+        await update.message.reply_text(message)
         return
     
     # Proposer les options de paiement
@@ -1251,7 +1248,7 @@ async def cancel_subscription_handler(update: Update, context: ContextTypes.DEFA
     message += f"📞 Besoin d'aide ? Contactez l'organisateur.\n"
     message += f"⚠️ L'accès reste valide jusqu'à la fin de la période payée."
     
-    await update.message.reply_text(message, parse_mode='Markdown')
+    await update.message.reply_text(message)
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Afficher l'aide"""
@@ -1339,7 +1336,7 @@ C'est le célèbre jeu du dinosaure de Google Chrome ! Votre T-Rex court automat
 • Entraînez-vous autant que vous voulez !
 """
     
-    await query.edit_message_text(message, parse_mode='Markdown')
+    await query.edit_message_text(message)
 
 async def help_rules_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Afficher les règles du concours via callback"""
@@ -1382,7 +1379,7 @@ La cagnotte totale est redistribuée au top 3 :
 • Remboursement possible avant premier jeu
 """
     
-    await query.edit_message_text(message, parse_mode='Markdown')
+    await query.edit_message_text(message)
 
 async def show_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Afficher le classement via callback"""
@@ -1410,7 +1407,7 @@ async def show_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
         
         message += f"\n💰 Cagnotte actuelle : {len(leaderboard) * 0.05:.2f} CHF"
     
-    await query.edit_message_text(message, parse_mode='Markdown')
+    await query.edit_message_text(message)
 
 async def setup_bot_commands():
     """Configurer les commandes du bot"""
@@ -1444,7 +1441,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                     f"✅ Profil configuré !\n\n"
                     f"👤 Nom : `{text}`\n\n"
                     f"Vous pouvez maintenant utiliser /start pour accéder au menu principal !",
-                    parse_mode='Markdown'
                 )
             else:
                 await update.message.reply_text(
