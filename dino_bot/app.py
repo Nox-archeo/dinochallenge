@@ -59,7 +59,7 @@ PAYPAL_MODE = os.getenv('PAYPAL_MODE', 'sandbox')  # 'sandbox' ou 'live'
 PAYPAL_WEBHOOK_URL = 'https://dinochallenge-bot.onrender.com/paypal-webhook'
 
 # Prix en CHF (taxes incluses)
-MONTHLY_PRICE_CHF = Decimal('0.05')  # Prix de test - prix final sera 11.00 CHF
+MONTHLY_PRICE_CHF = Decimal('11.00')  # Prix final en production
 
 # Configuration PayPal SDK
 if PAYPAL_CLIENT_ID and PAYPAL_SECRET_KEY:
@@ -1022,7 +1022,7 @@ async def notify_new_score(telegram_id: int, score: int):
             message = f"🎮 Score enregistré !\n\n"
             message += f"📊 Score : {score:,} points\n\n"
             message += f"⚠️ Accès limité - Pour participer au concours mensuel :\n"
-            message += f"💰 Payez 0.05 CHF avec /payment (test - final: 11 CHF)\n"
+            message += f"💰 Payez 11 CHF avec /payment\n"
             message += f"🏆 Tentez de gagner les prix mensuels !"
         else:
             message = f"🎮 Nouveau score enregistré !\n\n"
@@ -1058,7 +1058,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎮 Le jeu Chrome Dino avec des vrais prix !
 🏆 Concours mensuel avec redistribution des gains
 
-💰 Participation : 0.05 CHF (prix de test - final: 11 CHF)
+💰 Participation : 11 CHF
 • Paiement unique pour le mois en cours
 • OU abonnement mensuel automatique
 
@@ -1157,25 +1157,25 @@ async def payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Proposer les options de paiement
     keyboard = [
-        [{"text": "💳 Paiement Unique - 0.05 CHF", "callback_data": f"pay_once_{user.id}"}],
-        [{"text": "🔄 Abonnement Mensuel - 0.05 CHF/mois", "callback_data": f"pay_subscription_{user.id}"}],
+        [{"text": "💳 Paiement Unique - 11 CHF", "callback_data": f"pay_once_{user.id}"}],
+        [{"text": "🔄 Abonnement Mensuel - 11 CHF/mois", "callback_data": f"pay_subscription_{user.id}"}],
         [{"text": "❌ Annuler", "callback_data": "cancel_payment"}]
     ]
     
     message = "💰 PARTICIPER AU DINO CHALLENGE\n\n"
     message += "🎯 Choisissez votre option de paiement :\n\n"
-    message += "💳 Paiement Unique (0.05 CHF)\n"
+    message += "💳 Paiement Unique (11 CHF)\n"
     message += "• Accès pour le mois en cours uniquement\n"
     message += "• À renouveler chaque mois manuellement\n\n"
-    message += "🔄 Abonnement Mensuel (0.05 CHF/mois)\n"
+    message += "🔄 Abonnement Mensuel (11 CHF/mois)\n"
     message += "• Accès permanent avec renouvellement automatique\n"
     message += "• Annulable à tout moment\n"
     message += "• Plus pratique, jamais d'interruption !\n\n"
     message += "🏆 Prix mensuels distribués au top 3 !"
     
     inline_keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💳 Paiement Unique - 0.05 CHF", callback_data=f"pay_once_{user.id}")],
-        [InlineKeyboardButton("🔄 Abonnement Mensuel - 0.05 CHF/mois", callback_data=f"pay_subscription_{user.id}")],
+        [InlineKeyboardButton("💳 Paiement Unique - 11 CHF", callback_data=f"pay_once_{user.id}")],
+        [InlineKeyboardButton("🔄 Abonnement Mensuel - 11 CHF/mois", callback_data=f"pay_subscription_{user.id}")],
         [InlineKeyboardButton("❌ Annuler", callback_data="cancel_payment")]
     ])
     
@@ -1198,7 +1198,7 @@ async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT
             telegram_id = int(data.replace("pay_once_", ""))
             payment_url = f"https://dinochallenge-bot.onrender.com/create-payment?telegram_id={telegram_id}"
             
-            message = "💳 Paiement Unique - 0.05 CHF\n\n"
+            message = "💳 Paiement Unique - 11 CHF\n\n"
             message += "🔗 Cliquez sur le lien ci-dessous pour payer :\n\n"
             message += f"{payment_url}\n\n"
             message += "📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
@@ -1211,7 +1211,7 @@ async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT
             subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription?telegram_id={telegram_id}"
             
             # COPIE EXACTE du format du paiement unique qui fonctionne
-            message = "🔄 Abonnement Mensuel - 0.05 CHF/mois\n\n"
+            message = "🔄 Abonnement Mensuel - 11 CHF/mois\n\n"
             message += "🔗 Cliquez sur le lien ci-dessous pour vous abonner :\n\n"
             message += f"{subscription_url}\n\n"
             message += "📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
@@ -1261,7 +1261,7 @@ COMMENT JOUER :
 - Plus vous survivez longtemps, plus votre score est eleve
 
 CONCOURS :
-- Payez 0.05 CHF pour participer
+- Payez 11 CHF pour participer
 - Votre meilleur score du mois compte
 - Prix distribues au top 3 : 40%, 15%, 5%
 
@@ -1316,7 +1316,7 @@ async def help_rules_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     message = """📋 RÈGLES DU CONCOURS DINO CHALLENGE
 
 💰 Participation :
-• Coût : 0.05 CHF pour participer au mois en cours
+• Coût : 11 CHF pour participer au mois en cours
 • Paiement unique OU abonnement mensuel automatique
 • Seuls les participants payants peuvent soumettre des scores
 
@@ -1375,7 +1375,7 @@ async def show_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
             
             message += f"{emoji} {username} - {score} pts ({games} parties)\n"
         
-        message += f"\n💰 Cagnotte actuelle : {len(leaderboard) * 0.05:.2f} CHF"
+        message += f"\n💰 Cagnotte actuelle : {len(leaderboard) * 11:.2f} CHF"
     
     await query.edit_message_text(message)
 
