@@ -1205,25 +1205,19 @@ async def payment_callback_handler(update: Update, context: ContextTypes.DEFAULT
             telegram_id = int(data.replace("pay_subscription_", ""))
             subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription?telegram_id={telegram_id}"
             
-            # Message ultra-simple pour éviter tout problème de parsing
-            message = "Abonnement Mensuel - 0.05 CHF/mois\n\n"
-            message += "Lien de paiement :\n"
-            message += f"{subscription_url}\n\n"
-            message += "Redirection vers PayPal pour configurer l'abonnement.\n"
-            message += "Acces permanent avec renouvellement automatique.\n"
-            message += "Annulable depuis votre compte PayPal."
+            # Message ultra-simple pour test - VERSION 2025-08-15-08:00
+            message = f"Abonnement mensuel 0.05 CHF\n\nLien: {subscription_url}\n\nVersion: 2025-08-15-08:00"
             
-            logger.info(f"🔧 Debug - Message abonnement (longueur: {len(message)})")
-            logger.info(f"🔧 Debug - Contenu message: {repr(message)}")
+            logger.info(f"🔧 DEBUG VERSION 2025-08-15-08:00 - Callback: {data}")
+            logger.info(f"🔧 DEBUG VERSION 2025-08-15-08:00 - Message: {message}")
             
             try:
                 await query.edit_message_text(message)
-                logger.info("✅ Message abonnement envoyé avec succès")
+                logger.info("✅ SUCCESS VERSION 2025-08-15-08:00")
             except Exception as e:
-                logger.error(f"❌ Erreur edit_message_text abonnement: {e}")
-                # Essayer avec un message encore plus simple
-                simple_message = f"Abonnement 0.05 CHF/mois\n{subscription_url}"
-                await query.edit_message_text(simple_message)
+                logger.error(f"❌ ERROR VERSION 2025-08-15-08:00: {e}")
+                # Fallback ultra-simple
+                await query.edit_message_text(f"Abonnement: {subscription_url}")
     
     except Exception as e:
         logger.error(f"❌ Erreur callback query: {e}")
