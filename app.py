@@ -85,8 +85,8 @@ PAYPAL_WEBHOOK_URL = 'https://dinochallenge-bot.onrender.com/paypal-webhook'
 # URLs PayPal API v2 - PRODUCTION
 PAYPAL_BASE_URL = 'https://api-m.paypal.com' if PAYPAL_MODE == 'live' else 'https://api-m.sandbox.paypal.com'
 
-# Prix en CHF (taxes incluses) - MODE TEST
-MONTHLY_PRICE_CHF = Decimal('0.05')  # TEMPORAIRE POUR TESTS - Normalement 11.00 CHF
+# Prix en CHF (taxes incluses) - MODE PRODUCTION
+MONTHLY_PRICE_CHF = Decimal('11.00')  # Prix final en production
 
 # État des utilisateurs pour les conversations (édition profil)
 user_states = {}
