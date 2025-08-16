@@ -2703,8 +2703,7 @@ async def handle_callback_query(bot, callback_query):
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=callback_query.message.message_id,
-                text=text,
-                parse_mode='Markdown'
+                text=text
             )
 
         elif data == "profile":
@@ -3313,7 +3312,7 @@ async def handle_help_command(bot, message):
     """Gérer la commande /help"""
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     
-    text = """❓ **AIDE & RÈGLES - DINO CHALLENGE**
+    text = f"""❓ **AIDE & RÈGLES - DINO CHALLENGE**
 
 🦕 **Bienvenue dans le Dino Challenge !**
 Le concours mensuel du célèbre jeu Chrome Dino Runner !
@@ -3426,7 +3425,6 @@ Les gains sont calculés sur la cagnotte totale :
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown',
         reply_markup=reply_markup
     )
 
