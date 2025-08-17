@@ -2668,6 +2668,15 @@ async def process_update_manually(bot, update):
                 await handle_support_command(bot, update.message)
             elif text == '/demo':
                 await handle_demo_command(bot, update.message)
+            elif text == '/restore_admin':
+                # COMMANDE ADMIN URGENCE - Restaurer le profil admin
+                if user.id == ORGANIZER_CHAT_ID:
+                    await handle_restore_admin_command(bot, update.message)
+                else:
+                    await bot.send_message(
+                        chat_id=update.message.chat_id,
+                        text="❌ Commande réservée à l'administrateur."
+                    )
             # Gestion des boutons persistants (texte sans /)
             elif text in ["🎮 Jouer", "Jouer", "JOUER"]:
                 # Fonction de jeu spécifique (pas /start)
@@ -3057,10 +3066,23 @@ async def handle_start_command(bot, message):
     )
     
     # Vérifier si l'utilisateur a besoin de configurer son profil
+    # PROTECTION: Ne pas forcer la reconfiguration si l'utilisateur a déjà payé ou a des scores
     if not db_user.get('display_name'):
-        # Nouvel utilisateur ou profil incomplet - démarrer la configuration
-        await start_user_setup(bot, message)
-        return
+        # Vérifier si c'est vraiment un nouvel utilisateur
+        has_access = db.check_user_access(user.id)
+        user_scores = db.get_user_scores(user.id)
+        
+        # Si l'utilisateur a déjà payé ou a des scores, réparer le profil au lieu de forcer la reconfiguration
+        if has_access or user_scores:
+            # RÉPARATION AUTOMATIQUE du profil existant
+            logger.warning(f"🔧 Réparation profil utilisateur existant {user.id}")
+            fallback_name = user.first_name or user.username or f"Joueur_{user.id}"
+            db.update_user_profile(user.id, display_name=fallback_name)
+            logger.info(f"✅ Profil réparé pour {user.id}: nom='{fallback_name}'")
+        else:
+            # Nouvel utilisateur réel - démarrer la configuration
+            await start_user_setup(bot, message)
+            return
     
     # Vérifier l'accès
     has_access = db.check_user_access(user.id)
@@ -3277,9 +3299,25 @@ async def handle_profile_command(bot, message):
         return
     
     # Vérifier si le profil est complet
+    # PROTECTION: Ne pas forcer la reconfiguration si l'utilisateur a déjà payé ou a des scores
     if not db_user.get('display_name'):
-        await start_user_setup(bot, message)
-        return
+        # Vérifier si c'est vraiment un nouvel utilisateur
+        has_access = db.check_user_access(user.id)
+        user_scores = db.get_user_scores(user.id)
+        
+        # Si l'utilisateur a déjà payé ou a des scores, réparer le profil au lieu de forcer la reconfiguration
+        if has_access or user_scores:
+            # RÉPARATION AUTOMATIQUE du profil existant
+            logger.warning(f"🔧 Réparation profil utilisateur existant dans /profile {user.id}")
+            fallback_name = user.first_name or user.username or f"Joueur_{user.id}"
+            db.update_user_profile(user.id, display_name=fallback_name)
+            logger.info(f"✅ Profil réparé dans /profile pour {user.id}: nom='{fallback_name}'")
+            # Continuer avec le profil réparé
+            db_user = db.get_user_profile(user.id)  # Recharger les données
+        else:
+            # Nouvel utilisateur réel - commencer la configuration
+            await start_user_setup(bot, message)
+            return
     
     # Récupérer les informations du profil
     has_access = db.check_user_access(user.id)
@@ -3774,6 +3812,73 @@ async def handle_message(bot, message):
             
         )
 
+async def handle_restore_admin_command(bot, message):
+    """Commande URGENCE pour restaurer le profil admin manuellement"""
+    user = message.from_user
+    
+    # Double vérification sécurité - ADMIN SEULEMENT
+    if user.id != ORGANIZER_CHAT_ID:
+        await bot.send_message(
+            chat_id=message.chat_id,
+            text="❌ **Accès refusé** - Cette commande est réservée à l'administrateur.",
+        )
+        return
+    
+    try:
+        # Nettoyer complètement l'état utilisateur
+        if user.id in user_states:
+            del user_states[user.id]
+            logger.info(f"🧹 État admin nettoyé: {user.id}")
+        
+        # Forcer la recréation du profil admin
+        db_user = db.create_or_get_user(
+            telegram_id=user.id,
+            username=user.username or "admin",
+            first_name=user.first_name or "Admin"
+        )
+        
+        # Restaurer le profil complet avec tous les accès
+        success = db.update_user_profile(
+            telegram_id=user.id,
+            display_name="Nox (Admin)",
+            paypal_email="admin@dinochallenge.com"
+        )
+        
+        # Garantir l'accès permanent
+        payment_success = db.record_payment(
+            telegram_id=user.id,
+            amount=Decimal('11.00'),
+            payment_type='admin_emergency_restore'
+        )
+        
+        if success and payment_success:
+            # Confirmer la restauration complète
+            await bot.send_message(
+                chat_id=message.chat_id,
+                text="🚨 **RESTAURATION ADMIN RÉUSSIE** 🚨\n\n" +
+                     "✅ Profil admin restauré complètement\n" +
+                     "✅ Accès permanent activé\n" +
+                     "✅ État de configuration nettoyé\n\n" +
+                     "🏷️ **Profil:** Nox (Admin)\n" +
+                     "💳 **Statut:** Accès permanent\n" +
+                     "📧 **Email:** admin@dinochallenge.com\n\n" +
+                     "Vous pouvez maintenant utiliser toutes les fonctions du bot normalement."
+            )
+            logger.info(f"🚨 RESTAURATION ADMIN COMPLÈTE réussie pour {user.id}")
+        else:
+            await bot.send_message(
+                chat_id=message.chat_id,
+                text="❌ **ERREUR lors de la restauration admin**\n\n" +
+                     "Contactez le support technique d'urgence."
+            )
+            logger.error(f"❌ ÉCHEC restauration admin pour {user.id}")
+            
+    except Exception as e:
+        logger.error(f"❌ ERREUR CRITIQUE restauration admin: {e}")
+        await bot.send_message(
+            chat_id=message.chat_id,
+            text="❌ **ERREUR CRITIQUE**\n\nÉchec de la restauration d'urgence."
+        )
 
 async def run_telegram_bot():
     """Exécuter le bot Telegram avec protection anti-conflit et verrouillage"""
