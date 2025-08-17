@@ -2812,7 +2812,6 @@ async def handle_callback_query(bot, callback_query):
                      "• Tous vos scores\n" +
                      "• Vos paiements\n\n" +
                      "⚠️ **Cette action ne peut pas être annulée !**",
-                ,
                 reply_markup=reply_markup
             )
         
@@ -2919,7 +2918,6 @@ async def handle_play_game(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        ,
         reply_markup=reply_markup
     )
 
@@ -2985,7 +2983,6 @@ async def handle_play_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        ,
         reply_markup=reply_markup
     )
 
@@ -3081,7 +3078,6 @@ async def handle_start_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        ,
         reply_markup=reply_markup
     )
     
@@ -3135,7 +3131,6 @@ async def handle_payment_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        ,
         reply_markup=reply_markup
     )
 
@@ -3289,7 +3284,6 @@ async def handle_profile_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        ,
         reply_markup=reply_markup
     )
 
@@ -3476,7 +3470,6 @@ Cliquez sur le bouton ci-dessous pour commencer !"""
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        ,
         reply_markup=reply_markup
     )
 
@@ -3519,7 +3512,6 @@ async def handle_support_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        ,
         reply_markup=reply_markup
     )
 
