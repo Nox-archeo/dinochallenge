@@ -2440,6 +2440,36 @@ async def process_update_manually(bot, update):
             text = update.message.text
             user = update.message.from_user
             
+            # URGENCE: Sortir l'admin de la boucle de configuration
+            if user.id == ORGANIZER_CHAT_ID:
+                # Nettoyer l'état de l'admin
+                if user.id in user_states:
+                    del user_states[user.id]
+                    logger.info(f"🚨 URGENCE: État admin {user.id} nettoyé")
+                
+                # Forcer la création du profil admin avec accès
+                success = db.create_or_get_user(
+                    telegram_id=user.id,
+                    username=user.username or "admin",
+                    first_name=user.first_name or "Admin"
+                )
+                
+                # Donner accès permanent à l'admin
+                db.update_user_profile(
+                    telegram_id=user.id,
+                    display_name="Nox (Admin)",
+                    paypal_email="admin@dinochallenge.com"
+                )
+                
+                # Enregistrer un paiement pour donner l'accès
+                db.record_payment(
+                    telegram_id=user.id,
+                    amount=Decimal('11.00'),
+                    payment_type='admin_restore'
+                )
+                
+                logger.info(f"🚨 URGENCE: Profil admin {user.id} restauré avec accès")
+            
             # Vérifier si l'utilisateur est en cours de configuration
             if user.id in user_states:
                 state = user_states[user.id]
@@ -2602,6 +2632,28 @@ async def process_update_manually(bot, update):
             # Commandes normales
             if text == '/start':
                 await handle_start_command(bot, update.message)
+            elif text == '/restore_admin' and user.id == ORGANIZER_CHAT_ID:
+                # Commande d'urgence pour restaurer l'admin
+                if user.id in user_states:
+                    del user_states[user.id]
+                
+                db.update_user_profile(
+                    telegram_id=user.id,
+                    display_name="Nox (Admin)",
+                    paypal_email="admin@dinochallenge.com"
+                )
+                
+                db.record_payment(
+                    telegram_id=user.id,
+                    amount=Decimal('11.00'),
+                    payment_type='admin_restore'
+                )
+                
+                await bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text="🚨 **PROFIL ADMIN RESTAURÉ !**\n\n✅ Accès rétabli\n✅ Profil configuré\n✅ État nettoyé"
+                )
+                return
             elif text == '/payment':
                 await handle_payment_command(bot, update.message)
             elif text == '/leaderboard':
