@@ -325,7 +325,7 @@ class DatabaseManager:
                 
                 # Vérifier si l'utilisateur existe
                 cursor.execute("SELECT * FROM users WHERE telegram_id = %s" if self.is_postgres else 
-                             "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+                             "SELECT * FROM users WHERE telegram_id = ?", (telegram_id))
                 user = cursor.fetchone()
                 
                 if user:
@@ -343,7 +343,7 @@ class DatabaseManager:
                         INSERT INTO users (telegram_id, username, first_name, email)
                         VALUES (?, ?, ?, ?)
                     """, (telegram_id, username, first_name, username + '@telegram.user' if username else None))
-                    cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+                    cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id))
                     user = cursor.fetchone()
                 
                 conn.commit()
@@ -466,7 +466,7 @@ class DatabaseManager:
                 """ if not self.is_postgres else """
                     SELECT telegram_id, score, created_at FROM scores 
                     WHERE month_year = %s ORDER BY telegram_id, score DESC
-                """, (month_year,))
+                """, (month_year))
                 
                 all_scores = cursor.fetchall()
                 logger.info(f"📊 Scores trouvés pour {month_year}: {len(all_scores)}")
@@ -593,11 +593,11 @@ class DatabaseManager:
                 if self.is_postgres:
                     cursor.execute("""
                         UPDATE users SET has_paid_current_month = TRUE WHERE telegram_id = %s
-                    """, (telegram_id,))
+                    """, (telegram_id))
                 else:
                     cursor.execute("""
                         UPDATE users SET has_paid_current_month = 1 WHERE telegram_id = ?
-                    """, (telegram_id,))
+                    """, (telegram_id))
                 
                 conn.commit()
                 logger.info(f"✅ Paiement enregistré: {telegram_id} = {amount} CHF ({payment_type})")
@@ -652,13 +652,13 @@ class DatabaseManager:
                         UPDATE subscriptions 
                         SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP
                         WHERE paypal_subscription_id = %s
-                    """, (paypal_subscription_id,))
+                    """, (paypal_subscription_id))
                 else:
                     cursor.execute("""
                         UPDATE subscriptions 
                         SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP
                         WHERE paypal_subscription_id = ?
-                    """, (paypal_subscription_id,))
+                    """, (paypal_subscription_id))
                 
                 conn.commit()
                 logger.info(f"✅ Abonnement annulé: {paypal_subscription_id}")
@@ -683,7 +683,7 @@ class DatabaseManager:
                 """ if self.is_postgres else """
                     SELECT has_paid_current_month FROM users 
                     WHERE telegram_id = ?
-                """, (telegram_id,))
+                """, (telegram_id))
                 
                 result = cursor.fetchone()
                 if result:
@@ -731,7 +731,7 @@ class DatabaseManager:
                 """ if self.is_postgres else """
                     SELECT COUNT(*) FROM subscriptions 
                     WHERE telegram_id = ? AND status = 'active'
-                """, (telegram_id,))
+                """, (telegram_id))
                 
                 result = cursor.fetchone()
                 subscription_count = 0
@@ -880,7 +880,7 @@ class DatabaseManager:
                     SELECT * FROM users WHERE telegram_id = %s
                 """ if self.is_postgres else """
                     SELECT * FROM users WHERE telegram_id = ?
-                """, (telegram_id,))
+                """, (telegram_id))
                 
                 user = cursor.fetchone()
                 return dict(user) if user else {}
@@ -939,7 +939,7 @@ class DatabaseManager:
                 for table in tables:
                     cursor.execute(f"""
                         DELETE FROM {table} WHERE telegram_id = {'%s' if self.is_postgres else '?'}
-                    """, (telegram_id,))
+                    """, (telegram_id))
                 
                 return True
                 
@@ -965,7 +965,7 @@ class DatabaseManager:
                     SELECT SUM(amount) as total_amount, COUNT(*) as total_players
                     FROM payments 
                     WHERE month_year = ? AND status = 'completed'
-                """, (month_year,))
+                """, (month_year))
                 
                 result = cursor.fetchone()
                 if not result:
@@ -2263,7 +2263,7 @@ def get_telegram_id_from_subscription(subscription_id):
             """ if db.is_postgres else """
                 SELECT telegram_id FROM subscriptions 
                 WHERE paypal_subscription_id = ?
-            """, (subscription_id,))
+            """, (subscription_id))
             
             result = cursor.fetchone()
             if result:
@@ -2316,7 +2316,7 @@ async def notify_payment_success(telegram_id: int, amount: Decimal, payment_type
             await telegram_app.send_message(
                 chat_id=telegram_id,
                 text=message,
-                parse_mode='Markdown'
+                
             )
         
     except Exception as e:
@@ -2336,7 +2336,7 @@ async def notify_subscription_renewal(telegram_id: int, amount: Decimal):
             await telegram_app.send_message(
                 chat_id=telegram_id,
                 text=message,
-                parse_mode='Markdown'
+                
             )
         
     except Exception as e:
@@ -2390,7 +2390,7 @@ async def notify_new_score(telegram_id: int, score: int):
             await telegram_app.send_message(
                 chat_id=telegram_id,
                 text=message,
-                parse_mode='Markdown'
+                
             )
         
     except Exception as e:
@@ -2418,7 +2418,7 @@ async def notify_new_score(telegram_id: int, score: int):
             await telegram_app.send_message(
                 chat_id=telegram_id,
                 text=message,
-                parse_mode='Markdown'
+                
             )
     except Exception as e:
         logger.error(f"❌ Erreur notification score: {e}")
@@ -2466,7 +2466,7 @@ async def process_update_manually(bot, update):
                                  "📧 Renseignez votre email PayPal pour recevoir vos gains en cas de victoire.\n\n" +
                                  "💡 Vous pouvez taper 'passer' si vous préférez le renseigner plus tard.\n\n" +
                                  "📝 Envoyez votre email PayPal :",
-                            parse_mode='Markdown'
+                            
                         )
                         user_states[user.id] = f"waiting_for_email:{display_name}"
                     else:
@@ -2519,7 +2519,7 @@ async def process_update_manually(bot, update):
                         await bot.send_message(
                             chat_id=update.message.chat_id,
                             text=text_response,
-                            parse_mode='Markdown'
+                            
                         )
                         
                         # Afficher le profil complet
@@ -2633,9 +2633,6 @@ async def process_update_manually(bot, update):
     except Exception as e:
         logger.error(f"❌ Erreur traitement update: {e}")
 
-# États pour la conversation de changement de nom
-user_states = {}
-
 async def start_user_setup(bot, message):
     """Commencer la configuration d'un nouvel utilisateur"""
     user = message.from_user
@@ -2650,8 +2647,7 @@ async def start_user_setup(bot, message):
     
     await bot.send_message(
         chat_id=message.chat_id,
-        text=text,
-        parse_mode='Markdown'
+        text=text
     )
 
 async def handle_callback_query(bot, callback_query):
@@ -2668,7 +2664,7 @@ async def handle_callback_query(bot, callback_query):
                 chat_id=chat_id,
                 message_id=callback_query.message.message_id,
                 text="❌ **Paiement annulé.**",
-                parse_mode='Markdown'
+                
             )
             return
         
@@ -2686,7 +2682,7 @@ async def handle_callback_query(bot, callback_query):
                 chat_id=chat_id,
                 message_id=callback_query.message.message_id,
                 text=text,
-                parse_mode='Markdown'
+                
             )
         
         elif data.startswith("pay_subscription_"):
@@ -2760,7 +2756,7 @@ async def handle_callback_query(bot, callback_query):
                 chat_id=chat_id,
                 message_id=callback_query.message.message_id,
                 text=text,
-                parse_mode='Markdown'
+                
             )
 
         elif data == "payment":
@@ -2784,7 +2780,7 @@ async def handle_callback_query(bot, callback_query):
                 chat_id=chat_id,
                 text="✏️ **Modifier votre nom d'affichage**\n\n" +
                      "📝 Envoyez-moi votre nouveau nom :",
-                parse_mode='Markdown'
+                
             )
         
         elif data == "edit_email":
@@ -2793,7 +2789,7 @@ async def handle_callback_query(bot, callback_query):
                 chat_id=chat_id,
                 text="📧 **Modifier votre email PayPal**\n\n" +
                      "📝 Envoyez votre nouvel email PayPal ou tapez 'supprimer' pour l'effacer :",
-                parse_mode='Markdown'
+                
             )
         
         elif data == "delete_profile":
@@ -2816,7 +2812,7 @@ async def handle_callback_query(bot, callback_query):
                      "• Tous vos scores\n" +
                      "• Vos paiements\n\n" +
                      "⚠️ **Cette action ne peut pas être annulée !**",
-                parse_mode='Markdown',
+                ,
                 reply_markup=reply_markup
             )
         
@@ -2830,14 +2826,14 @@ async def handle_callback_query(bot, callback_query):
                     text="✅ **Profil supprimé**\n\n" +
                          "Votre profil a été entièrement supprimé.\n" +
                          "Utilisez /start pour créer un nouveau profil.",
-                    parse_mode='Markdown'
+                    
                 )
             else:
                 await bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=callback_query.message.message_id,
                     text="❌ **Erreur**\n\nImpossible de supprimer le profil. Contactez l'support.",
-                    parse_mode='Markdown'
+                    
                 )
         
         elif data == "cancel_delete":
@@ -2923,7 +2919,7 @@ async def handle_play_game(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown',
+        ,
         reply_markup=reply_markup
     )
 
@@ -2989,7 +2985,7 @@ async def handle_play_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown',
+        ,
         reply_markup=reply_markup
     )
 
@@ -3003,6 +2999,12 @@ async def handle_start_command(bot, message):
         username=user.username,
         first_name=user.first_name
     )
+    
+    # Vérifier si l'utilisateur a besoin de configurer son profil
+    if not db_user.get('display_name'):
+        # Nouvel utilisateur ou profil incomplet - démarrer la configuration
+        await start_user_setup(bot, message)
+        return
     
     # Vérifier l'accès
     has_access = db.check_user_access(user.id)
@@ -3079,7 +3081,7 @@ async def handle_start_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown',
+        ,
         reply_markup=reply_markup
     )
     
@@ -3105,7 +3107,7 @@ async def handle_payment_command(bot, message):
         await bot.send_message(
             chat_id=message.chat_id,
             text=text,
-            parse_mode='Markdown'
+            
         )
         return
     
@@ -3133,7 +3135,7 @@ async def handle_payment_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown',
+        ,
         reply_markup=reply_markup
     )
 
@@ -3287,7 +3289,7 @@ async def handle_profile_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown',
+        ,
         reply_markup=reply_markup
     )
 
@@ -3305,7 +3307,7 @@ async def handle_cancel_subscription_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown'
+        
     )
 
 async def handle_help_command(bot, message):
@@ -3474,7 +3476,7 @@ Cliquez sur le bouton ci-dessous pour commencer !"""
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown',
+        ,
         reply_markup=reply_markup
     )
 
@@ -3517,7 +3519,7 @@ async def handle_support_command(bot, message):
     await bot.send_message(
         chat_id=message.chat_id,
         text=text,
-        parse_mode='Markdown',
+        ,
         reply_markup=reply_markup
     )
 
@@ -3581,7 +3583,7 @@ async def notify_monthly_winners():
                 await bot.send_message(
                     chat_id=winner['telegram_id'],
                     text=text,
-                    parse_mode='Markdown'
+                    
                 )
                 
                 logger.info(f"✅ Notification envoyée à {winner['display_name']} ({winner['position']}e place)")
@@ -3644,7 +3646,7 @@ async def notify_new_score(telegram_id: int, score: int):
         await bot.send_message(
             chat_id=telegram_id,
             text=text,
-            parse_mode='Markdown'
+            
         )
         
     except Exception as e:
@@ -3669,13 +3671,13 @@ async def handle_message(bot, message):
                 await bot.send_message(
                     chat_id=message.chat_id,
                     text=f"✅ **Nom mis à jour !**\n\nVotre nouveau nom : **{new_name}**",
-                    parse_mode='Markdown'
+                    
                 )
             else:
                 await bot.send_message(
                     chat_id=message.chat_id,
                     text="❌ Erreur lors de la mise à jour du nom.",
-                    parse_mode='Markdown'
+                    
                 )
             
             # Supprimer l'état
@@ -3691,7 +3693,7 @@ async def handle_message(bot, message):
                 await bot.send_message(
                     chat_id=message.chat_id,
                     text="❌ **Email invalide**\n\nVeuillez entrer une adresse email valide.",
-                    parse_mode='Markdown'
+                    
                 )
                 return
             
@@ -3701,13 +3703,13 @@ async def handle_message(bot, message):
                 await bot.send_message(
                     chat_id=message.chat_id,
                     text=f"✅ **Email PayPal mis à jour !**\n\nEmail : **{paypal_email}**\n\nVous pourrez recevoir vos gains automatiquement.",
-                    parse_mode='Markdown'
+                    
                 )
             else:
                 await bot.send_message(
                     chat_id=message.chat_id,
                     text="❌ Erreur lors de la mise à jour de l'email PayPal.",
-                    parse_mode='Markdown'
+                    
                 )
             
             # Supprimer l'état
@@ -3718,7 +3720,7 @@ async def handle_message(bot, message):
         await bot.send_message(
             chat_id=message.chat_id,
             text="🤖 Utilisez /start pour voir le menu principal.",
-            parse_mode='Markdown'
+            
         )
 
 
@@ -3969,7 +3971,7 @@ def admin_check_access(telegram_id):
                 SELECT * FROM payments WHERE telegram_id = %s ORDER BY payment_date DESC
             """ if db.is_postgres else """
                 SELECT * FROM payments WHERE telegram_id = ? ORDER BY payment_date DESC
-            """, (telegram_id,))
+            """, (telegram_id))
             payments = [dict(row) for row in cursor.fetchall()]
         
         return jsonify({
@@ -4017,7 +4019,7 @@ def debug_user_status(telegram_id):
                 SELECT * FROM users WHERE telegram_id = %s
             """ if db.is_postgres else """
                 SELECT * FROM users WHERE telegram_id = ?
-            """, (telegram_id,))
+            """, (telegram_id))
             user = cursor.fetchone()
             
             # Récupérer scores
@@ -4027,7 +4029,7 @@ def debug_user_status(telegram_id):
             """ if db.is_postgres else """
                 SELECT score, created_at, month_year FROM scores 
                 WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 10
-            """, (telegram_id,))
+            """, (telegram_id))
             scores = cursor.fetchall()
             
             # Récupérer paiements  
@@ -4037,7 +4039,7 @@ def debug_user_status(telegram_id):
             """ if db.is_postgres else """
                 SELECT amount, status, payment_date, month_year FROM payments 
                 WHERE telegram_id = ? ORDER BY payment_date DESC LIMIT 10
-            """, (telegram_id,))
+            """, (telegram_id))
             payments = cursor.fetchall()
             
             # Vérifier accès
@@ -4096,7 +4098,7 @@ def reset_user_data():
                 DELETE FROM scores WHERE telegram_id = %s
             """ if db.is_postgres else """
                 DELETE FROM scores WHERE telegram_id = ?
-            """, (telegram_id,))
+            """, (telegram_id))
             
             conn.commit()
             
