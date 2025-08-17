@@ -2484,35 +2484,50 @@ async def process_update_manually(bot, update):
                     
                     # Valider l'email ou permettre de passer
                     paypal_email = None
-                    if text.lower().strip() not in ['passer', 'skip', 'non', 'no']:
+                    text_lower = text.lower().strip()
+                    if text_lower not in ['passer', 'skip', 'non', 'no', 'pass', 'rien', 'vide']:
                         # Validation simple de l'email
-                        if '@' in text and '.' in text.split('@')[1]:
+                        if '@' in text and '.' in text.split('@')[1] and len(text.strip()) > 5:
                             paypal_email = text.strip()
                         else:
                             await bot.send_message(
                                 chat_id=update.message.chat_id,
                                 text="❌ **Email invalide**\n\n" +
-                                     "Veuillez entrer un email valide ou tapez 'passer'.\n" +
+                                     "Veuillez entrer un email valide ou tapez 'passer' pour ignorer.\n" +
                                      "📝 Email PayPal :"
                             )
                             return
                     
                     # Créer/mettre à jour l'utilisateur avec les nouvelles informations
+                    logger.info(f"🔄 Tentative sauvegarde profil: user={user.id}, nom='{display_name}', email='{paypal_email}'")
+                    
+                    # S'assurer que l'utilisateur existe en base
+                    db_user = db.create_or_get_user(
+                        telegram_id=user.id,
+                        username=user.username,
+                        first_name=user.first_name
+                    )
+                    
+                    # Mettre à jour le profil
                     success = db.update_user_profile(
                         telegram_id=user.id,
                         display_name=display_name,
                         paypal_email=paypal_email
                     )
                     
+                    logger.info(f"📊 Résultat sauvegarde: success={success}")
                     if success:
                         # Nettoyer l'état
                         del user_states[user.id]
+                        logger.info(f"✅ État utilisateur nettoyé pour {user.id}")
                         
                         # Message de confirmation et redirection vers le profil
                         text_response = "✅ **Profil configuré !**\n\n"
                         text_response += f"🏷️ **Nom:** {display_name}\n"
                         if paypal_email:
                             text_response += f"📧 **Email PayPal:** {paypal_email}\n"
+                        else:
+                            text_response += f"📧 **Email PayPal:** Non renseigné\n"
                         text_response += f"\n🎮 **Votre profil est maintenant prêt !**\n"
                         text_response += f"💰 Utilisez /payment pour participer au concours."
                         
