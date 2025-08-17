@@ -1480,19 +1480,15 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
                 },
                 "description": f"Dino Challenge - Accès mensuel pour {datetime.now().strftime('%B %Y')}"
             }],
-            "payment_source": {
-                "paypal": {
-                    "experience_context": {
-                        "brand_name": "Dino Challenge",
-                        "locale": "fr-CH",
-                        "landing_page": "NO_PREFERENCE",  # Laisse PayPal choisir automatiquement
-                        "shipping_preference": "NO_SHIPPING",
-                        "user_action": "PAY_NOW",
-                        "payment_method_preference": "UNRESTRICTED",  # Permet tous types de paiements
-                        "return_url": f"https://dinochallenge-bot.onrender.com/payment-success?telegram_id={telegram_id}",
-                        "cancel_url": f"{GAME_URL}?payment=cancelled"
-                    }
-                }
+            "application_context": {
+                "brand_name": "Dino Challenge",
+                "locale": "fr-CH",
+                "landing_page": "BILLING",  # Force l'affichage des options de paiement
+                "shipping_preference": "NO_SHIPPING",
+                "user_action": "PAY_NOW",
+                "payment_method_preference": "UNRESTRICTED",  # Permet tous types de paiements
+                "return_url": f"https://dinochallenge-bot.onrender.com/payment-success?telegram_id={telegram_id}",
+                "cancel_url": f"{GAME_URL}?payment=cancelled"
             }
         }
         
@@ -2017,10 +2013,6 @@ def create_paypal_subscription(telegram_id: int, plan_id: str):
                 "locale": "fr-CH",
                 "shipping_preference": "NO_SHIPPING",
                 "user_action": "SUBSCRIBE_NOW",
-                "payment_method": {
-                    "payer_selected": "PAYPAL",
-                    "payee_preferred": "IMMEDIATE_PAYMENT_REQUIRED"
-                },
                 "return_url": f"{GAME_URL}?telegram_id={telegram_id}&subscription=success",
                 "cancel_url": f"{GAME_URL}?telegram_id={telegram_id}&subscription=cancelled"
             }
