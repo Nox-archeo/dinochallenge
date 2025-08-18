@@ -8,8 +8,28 @@ import os
 import logging
 import threading
 import time
+import sys
+from decimal import Decimal
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+
+# Ajouter le répertoire parent au path pour importer app
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+
+# Importer la logique de app.py
+try:
+    from app import DatabaseManager, MONTHLY_PRICE_CHF, ORGANIZER_CHAT_ID, GAME_URL
+    logger = logging.getLogger(__name__)
+    logger.info("✅ Import des modules app.py réussi")
+except ImportError as e:
+    logger.error(f"❌ Erreur import app.py: {e}")
+    # Fallback pour éviter le crash
+    MONTHLY_PRICE_CHF = Decimal('11.00')
+    ORGANIZER_CHAT_ID = 5932296330
+    GAME_URL = "https://nox-archeo.github.io/dinochallenge/"
+    DatabaseManager = None
 
 # Configuration logging
 logging.basicConfig(level=logging.INFO)
@@ -62,15 +82,22 @@ class DinoBotFonctionnel:
         )
     
     async def payment_command(self, update: Update, context):
-        """Commande /payment"""
+        """Commande /payment - Rediriger vers l'API PayPal"""
+        user_id = update.effective_user.id
+        
+        # URL de paiement via l'API Flask
+        payment_url = f"https://dinochallenge-bot.onrender.com/create-payment?telegram_id={user_id}"
+        
         await update.message.reply_text(
-            "💳 **ABONNEMENT DINO CHALLENGE**\n\n"
+            "💳 **PAIEMENT DINO CHALLENGE**\n\n"
             "💰 **Prix:** 11 CHF/mois\n"
             "🎮 **Accès:** 5 tentatives par jour\n"
             "🏆 **Gains:** Participez aux prix mensuels\n\n"
-            "🚧 **Paiement en cours d'implémentation**\n"
-            "Contactez l'organisateur pour vous abonner.",
-            parse_mode='Markdown'
+            f"� **[Cliquer ici pour payer avec PayPal]({payment_url})**\n\n"
+            "✅ Paiement sécurisé via PayPal\n"
+            "💳 Cartes bancaires acceptées",
+            parse_mode='Markdown',
+            disable_web_page_preview=True
         )
     
     async def leaderboard_command(self, update: Update, context):
@@ -123,15 +150,29 @@ class DinoBotFonctionnel:
         await query.answer()
         
         if query.data == "play":
+            user_id = query.from_user.id
+            game_url = f"https://nox-archeo.github.io/dinochallenge/?telegram_id={user_id}&mode=competition"
             await query.edit_message_text(
                 "🎮 **JOUER AU DINO CHALLENGE**\n\n"
-                "🚧 Fonctionnalité en cours d'implémentation\n"
-                "🔗 Lien du jeu: https://nox-archeo.github.io/dinochallenge/\n\n"
-                "Pour jouer, visitez le lien ci-dessus.",
-                parse_mode='Markdown'
+                f"� **[Cliquer ici pour jouer]({game_url})**\n\n"
+                "🏆 Faites votre meilleur score !\n"
+                "⚡ 5 tentatives par jour maximum\n"
+                "💰 Abonnez-vous d'abord si ce n'est pas fait !",
+                parse_mode='Markdown',
+                disable_web_page_preview=True
             )
         elif query.data == "payment":
-            await self.payment_command(query, context)
+            user_id = query.from_user.id
+            payment_url = f"https://dinochallenge-bot.onrender.com/create-payment?telegram_id={user_id}"
+            await query.edit_message_text(
+                "💳 **PAIEMENT SÉCURISÉ**\n\n"
+                "💰 **Prix:** 11 CHF/mois\n\n"
+                f"💳 **[Payer avec PayPal]({payment_url})**\n\n"
+                "✅ Cartes bancaires acceptées\n"
+                "🔒 Paiement 100% sécurisé",
+                parse_mode='Markdown',
+                disable_web_page_preview=True
+            )
         elif query.data == "leaderboard":
             await self.leaderboard_command(query, context)
         elif query.data == "profile":
