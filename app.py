@@ -325,7 +325,7 @@ class DatabaseManager:
                 
                 # Vérifier si l'utilisateur existe
                 cursor.execute("SELECT * FROM users WHERE telegram_id = %s" if self.is_postgres else 
-                             "SELECT * FROM users WHERE telegram_id = ?", (telegram_id))
+                             "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
                 user = cursor.fetchone()
                 
                 if user:
@@ -343,7 +343,7 @@ class DatabaseManager:
                         INSERT INTO users (telegram_id, username, first_name, email)
                         VALUES (?, ?, ?, ?)
                     """, (telegram_id, username, first_name, username + '@telegram.user' if username else None))
-                    cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id))
+                    cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
                     user = cursor.fetchone()
                 
                 conn.commit()
@@ -466,7 +466,7 @@ class DatabaseManager:
                 """ if not self.is_postgres else """
                     SELECT telegram_id, score, created_at FROM scores 
                     WHERE month_year = %s ORDER BY telegram_id, score DESC
-                """, (month_year))
+                """, (month_year,))
                 
                 all_scores = cursor.fetchall()
                 logger.info(f"📊 Scores trouvés pour {month_year}: {len(all_scores)}")
@@ -593,11 +593,11 @@ class DatabaseManager:
                 if self.is_postgres:
                     cursor.execute("""
                         UPDATE users SET has_paid_current_month = TRUE WHERE telegram_id = %s
-                    """, (telegram_id))
+                    """, (telegram_id,))
                 else:
                     cursor.execute("""
                         UPDATE users SET has_paid_current_month = 1 WHERE telegram_id = ?
-                    """, (telegram_id))
+                    """, (telegram_id,))
                 
                 conn.commit()
                 logger.info(f"✅ Paiement enregistré: {telegram_id} = {amount} CHF ({payment_type})")
@@ -652,13 +652,13 @@ class DatabaseManager:
                         UPDATE subscriptions 
                         SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP
                         WHERE paypal_subscription_id = %s
-                    """, (paypal_subscription_id))
+                    """, (paypal_subscription_id,))
                 else:
                     cursor.execute("""
                         UPDATE subscriptions 
                         SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP
                         WHERE paypal_subscription_id = ?
-                    """, (paypal_subscription_id))
+                    """, (paypal_subscription_id,))
                 
                 conn.commit()
                 logger.info(f"✅ Abonnement annulé: {paypal_subscription_id}")
@@ -683,7 +683,7 @@ class DatabaseManager:
                 """ if self.is_postgres else """
                     SELECT has_paid_current_month FROM users 
                     WHERE telegram_id = ?
-                """, (telegram_id))
+                """, (telegram_id,))
                 
                 result = cursor.fetchone()
                 if result:
@@ -731,7 +731,7 @@ class DatabaseManager:
                 """ if self.is_postgres else """
                     SELECT COUNT(*) FROM subscriptions 
                     WHERE telegram_id = ? AND status = 'active'
-                """, (telegram_id))
+                """, (telegram_id,))
                 
                 result = cursor.fetchone()
                 subscription_count = 0
@@ -880,7 +880,7 @@ class DatabaseManager:
                     SELECT * FROM users WHERE telegram_id = %s
                 """ if self.is_postgres else """
                     SELECT * FROM users WHERE telegram_id = ?
-                """, (telegram_id))
+                """, (telegram_id,))
                 
                 user = cursor.fetchone()
                 return dict(user) if user else {}
@@ -961,7 +961,7 @@ class DatabaseManager:
                 for table in tables:
                     cursor.execute(f"""
                         DELETE FROM {table} WHERE telegram_id = {'%s' if self.is_postgres else '?'}
-                    """, (telegram_id))
+                    """, (telegram_id,))
                 
                 return True
                 
@@ -987,7 +987,7 @@ class DatabaseManager:
                     SELECT SUM(amount) as total_amount, COUNT(*) as total_players
                     FROM payments 
                     WHERE month_year = ? AND status = 'completed'
-                """, (month_year))
+                """, (month_year,))
                 
                 result = cursor.fetchone()
                 if not result:
@@ -2284,7 +2284,7 @@ def get_telegram_id_from_subscription(subscription_id):
             """ if db.is_postgres else """
                 SELECT telegram_id FROM subscriptions 
                 WHERE paypal_subscription_id = ?
-            """, (subscription_id))
+            """, (subscription_id,))
             
             result = cursor.fetchone()
             if result:
@@ -4176,7 +4176,7 @@ def admin_check_access(telegram_id):
                 SELECT * FROM payments WHERE telegram_id = %s ORDER BY payment_date DESC
             """ if db.is_postgres else """
                 SELECT * FROM payments WHERE telegram_id = ? ORDER BY payment_date DESC
-            """, (telegram_id))
+            """, (telegram_id,))
             payments = [dict(row) for row in cursor.fetchall()]
         
         return jsonify({
@@ -4224,7 +4224,7 @@ def debug_user_status(telegram_id):
                 SELECT * FROM users WHERE telegram_id = %s
             """ if db.is_postgres else """
                 SELECT * FROM users WHERE telegram_id = ?
-            """, (telegram_id))
+            """, (telegram_id,))
             user = cursor.fetchone()
             
             # Récupérer scores
@@ -4234,7 +4234,7 @@ def debug_user_status(telegram_id):
             """ if db.is_postgres else """
                 SELECT score, created_at, month_year FROM scores 
                 WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 10
-            """, (telegram_id))
+            """, (telegram_id,))
             scores = cursor.fetchall()
             
             # Récupérer paiements  
@@ -4244,7 +4244,7 @@ def debug_user_status(telegram_id):
             """ if db.is_postgres else """
                 SELECT amount, status, payment_date, month_year FROM payments 
                 WHERE telegram_id = ? ORDER BY payment_date DESC LIMIT 10
-            """, (telegram_id))
+            """, (telegram_id,))
             payments = cursor.fetchall()
             
             # Vérifier accès
@@ -4303,7 +4303,7 @@ def reset_user_data():
                 DELETE FROM scores WHERE telegram_id = %s
             """ if db.is_postgres else """
                 DELETE FROM scores WHERE telegram_id = ?
-            """, (telegram_id))
+            """, (telegram_id,))
             
             conn.commit()
             
