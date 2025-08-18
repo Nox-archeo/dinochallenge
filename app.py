@@ -2469,8 +2469,8 @@ async def process_update_manually(bot, update):
             text = update.message.text
             user = update.message.from_user
             
-            # URGENCE: Sortir l'admin de la boucle de configuration
-            if user.id == ORGANIZER_CHAT_ID:
+            # URGENCE: Sortir l'admin de la boucle de configuration (sauf si setup volontaire)
+            if user.id == ORGANIZER_CHAT_ID and text != '/setup':
                 # Nettoyer l'état de l'admin
                 if user.id in user_states:
                     del user_states[user.id]
