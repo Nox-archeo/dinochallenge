@@ -3106,7 +3106,7 @@ async def handle_start_command(bot, message):
         user_scores = db.get_user_scores(user.id)
         
         # Si l'utilisateur a déjà payé ou a des scores, réparer le profil au lieu de forcer la reconfiguration
-        if has_access or user_scores:
+        if has_access or (user_scores and len(user_scores) > 0):
             # RÉPARATION AUTOMATIQUE du profil existant
             logger.warning(f"🔧 Réparation profil utilisateur existant {user.id}")
             fallback_name = user.first_name or user.username or f"Joueur_{user.id}"
@@ -3339,7 +3339,7 @@ async def handle_profile_command(bot, message):
         user_scores = db.get_user_scores(user.id)
         
         # Si l'utilisateur a déjà payé ou a des scores, réparer le profil au lieu de forcer la reconfiguration
-        if has_access or user_scores:
+        if has_access or (user_scores and len(user_scores) > 0):
             # RÉPARATION AUTOMATIQUE du profil existant
             logger.warning(f"🔧 Réparation profil utilisateur existant dans /profile {user.id}")
             fallback_name = user.first_name or user.username or f"Joueur_{user.id}"

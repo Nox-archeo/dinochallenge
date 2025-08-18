@@ -2,9 +2,9 @@
 # Script de démarrage pour Render
 echo "🚀 Démarrage du Dino Challenge - Production"
 
-# TOUJOURS utiliser main.py qui gère les 2 services
-echo "🌐 Démarrage API Flask + Bot Telegram via main.py"
-exec python main.py
+# Utiliser app.py qui gère déjà les 2 services en production
+echo "🔥 Démarrage app.py complet (API Flask + Bot Telegram)"
+exec python app.py
     exec python telegram_bot.py
 fi
     python bot.py
