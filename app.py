@@ -1505,7 +1505,8 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
             "payment_source": {
                 "paypal": {
                     "experience_context": {
-                        "payment_method_preference": "UNRESTRICTED"
+                        "payment_method_preference": "UNRESTRICTED",
+                        "user_action": "PAY_NOW"
                     }
                 }
             },
@@ -1514,7 +1515,6 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
                 "locale": "fr-CH",
                 "landing_page": "BILLING",  # Force l'affichage des options de paiement
                 "shipping_preference": "NO_SHIPPING",
-                "user_action": "PAY_NOW",
                 "payment_method_preference": "UNRESTRICTED",  # Permet tous types de paiements
                 "return_url": f"https://dinochallenge-bot.onrender.com/payment-success?telegram_id={telegram_id}",
                 "cancel_url": f"{GAME_URL}?payment=cancelled"
@@ -2689,6 +2689,8 @@ async def process_update_manually(bot, update):
                 await handle_leaderboard_command(bot, update.message)
             elif text == '/profile':
                 await handle_profile_command(bot, update.message)
+            elif text == '/setup':
+                await force_user_setup(bot, update.message)
             elif text == '/cancel_subscription':
                 await handle_cancel_subscription_command(bot, update.message)
             elif text == '/help':
@@ -2741,6 +2743,23 @@ async def start_user_setup(bot, message):
     text += f"**Étape 1/2 : Nom d'affichage**\n"
     text += f"Ce nom apparaîtra dans le classement.\n\n"
     text += f"📝 Envoyez-moi le nom que vous voulez utiliser :"
+    
+    await bot.send_message(
+        chat_id=message.chat_id,
+        text=text
+    )
+
+async def force_user_setup(bot, message):
+    """Forcer la reconfiguration d'un utilisateur (commande /setup)"""
+    user = message.from_user
+    user_states[user.id] = "waiting_for_name"
+    
+    text = f"🔧 **Reconfiguration de votre profil**\n\n"
+    text += f"👋 Salut {user.first_name} !\n\n"
+    text += f"Vous allez pouvoir modifier vos informations :\n\n"
+    text += f"**Étape 1/2 : Nom d'affichage**\n"
+    text += f"Ce nom apparaîtra dans le classement.\n\n"
+    text += f"📝 Envoyez-moi le nouveau nom que vous voulez utiliser :"
     
     await bot.send_message(
         chat_id=message.chat_id,
@@ -3137,6 +3156,7 @@ async def handle_start_command(bot, message):
 /payment - 💰 Participer au concours
 /leaderboard - 🏆 Voir le classement
 /profile - 👤 Mon profil
+/setup - 🔧 Reconfigurer mon profil
 /help - ❓ Aide complète
 
 """
