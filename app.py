@@ -978,15 +978,17 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Calculer le total des paiements pour le mois
+                # Calculer le total des paiements pour le mois (SEULEMENT les vrais paiements)
                 cursor.execute("""
                     SELECT SUM(amount) as total_amount, COUNT(*) as total_players
                     FROM payments 
-                    WHERE month_year = %s AND status = 'completed'
+                    WHERE month_year = %s AND status = 'completed' 
+                    AND payment_type NOT IN ('admin_restore', 'test')
                 """ if self.is_postgres else """
                     SELECT SUM(amount) as total_amount, COUNT(*) as total_players
                     FROM payments 
                     WHERE month_year = ? AND status = 'completed'
+                    AND payment_type NOT IN ('admin_restore', 'test')
                 """, (month_year,))
                 
                 result = cursor.fetchone()
@@ -1027,6 +1029,34 @@ class DatabaseManager:
                 'total_players': 0,
                 'prizes': {'first': 0, 'second': 0, 'third': 0, 'organization_fees': 0}
             }
+    
+    def clean_test_payments(self):
+        """Nettoyer tous les paiements de test et admin_restore"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Supprimer tous les paiements de test
+                cursor.execute("""
+                    DELETE FROM payments 
+                    WHERE payment_type IN ('admin_restore', 'test')
+                    OR paypal_order_id LIKE '%test%'
+                    OR paypal_order_id LIKE '%admin%'
+                """ if self.is_postgres else """
+                    DELETE FROM payments 
+                    WHERE payment_type IN ('admin_restore', 'test')
+                    OR paypal_order_id LIKE '%test%'
+                    OR paypal_order_id LIKE '%admin%'
+                """)
+                
+                deleted_count = cursor.rowcount
+                conn.commit()
+                logger.info(f"🧹 Nettoyage: {deleted_count} paiements de test supprimés")
+                return deleted_count
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur nettoyage paiements: {e}")
+            return 0
 
     def get_user_position_and_prize(self, telegram_id: int, month_year: str = None) -> Dict:
         """Obtenir la position actuelle d'un utilisateur et son gain potentiel"""
@@ -2469,36 +2499,6 @@ async def process_update_manually(bot, update):
             text = update.message.text
             user = update.message.from_user
             
-            # URGENCE: Sortir l'admin de la boucle de configuration (sauf si setup volontaire)
-            if user.id == ORGANIZER_CHAT_ID and text != '/setup':
-                # Nettoyer l'état de l'admin
-                if user.id in user_states:
-                    del user_states[user.id]
-                    logger.info(f"🚨 URGENCE: État admin {user.id} nettoyé")
-                
-                # Forcer la création du profil admin avec accès
-                success = db.create_or_get_user(
-                    telegram_id=user.id,
-                    username=user.username or "admin",
-                    first_name=user.first_name or "Admin"
-                )
-                
-                # Donner accès permanent à l'admin
-                db.update_user_profile(
-                    telegram_id=user.id,
-                    display_name="Nox (Admin)",
-                    paypal_email="admin@dinochallenge.com"
-                )
-                
-                # Enregistrer un paiement pour donner l'accès
-                db.record_payment(
-                    telegram_id=user.id,
-                    amount=Decimal('11.00'),
-                    payment_type='admin_restore'
-                )
-                
-                logger.info(f"🚨 URGENCE: Profil admin {user.id} restauré avec accès")
-            
             # Vérifier si l'utilisateur est en cours de configuration
             if user.id in user_states:
                 state = user_states[user.id]
@@ -2703,6 +2703,19 @@ async def process_update_manually(bot, update):
                 # COMMANDE ADMIN URGENCE - Restaurer le profil admin
                 if user.id == ORGANIZER_CHAT_ID:
                     await handle_restore_admin_command(bot, update.message)
+                else:
+                    await bot.send_message(
+                        chat_id=update.message.chat_id,
+                        text="❌ Commande réservée à l'administrateur."
+                    )
+            elif text == '/clean_payments':
+                # COMMANDE ADMIN - Nettoyer les paiements de test
+                if user.id == ORGANIZER_CHAT_ID:
+                    deleted_count = db.clean_test_payments()
+                    await bot.send_message(
+                        chat_id=update.message.chat_id,
+                        text=f"🧹 **Nettoyage effectué !**\n\n✅ {deleted_count} paiements de test supprimés\n💰 Les prix sont maintenant corrects"
+                    )
                 else:
                     await bot.send_message(
                         chat_id=update.message.chat_id,
