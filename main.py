@@ -34,30 +34,24 @@ if os.environ.get('RENDER'):
                 print(f"❌ Erreur Gunicorn: {e}")
         
         def start_bot():
-            """Démarrer le bot Telegram - Utiliser app.py (logique complète)"""
+            """Démarrer le bot Telegram - Version production 2025"""
             try:
-                # UTILISER LE BOT COMPLET DANS app.py !
-                print("🚀 Démarrage bot complet depuis app.py...")
-                import app
-                asyncio.run(app.run_telegram_bot())
+                # Fallback vers bot fonctionnel (qui marche)
+                print("🔄 Démarrage bot fonctionnel...")
+                import bot_fonctionnel
+                asyncio.run(bot_fonctionnel.main())
                 
             except Exception as e:
-                print(f"❌ Erreur Bot app.py: {e}")
+                print(f"❌ Erreur Bot fonctionnel: {e}")
                 
-                # Fallback vers bot fonctionnel seulement en cas d'urgence
-                print("🔄 Fallback vers bot fonctionnel...")
+                # En dernier recours, bot minimal
+                print("🔄 Fallback vers bot minimal...")
                 try:
-                    import bot_fonctionnel
-                    asyncio.run(bot_fonctionnel.main())
+                    import bot_minimal
+                    asyncio.run(bot_minimal.main())
                 except Exception as e2:
-                    print(f"❌ Erreur Bot fonctionnel: {e2}")
-                    
-                    # En dernier recours, bot minimal
-                    print("🔄 Fallback vers bot minimal...")
-                    try:
-                        import bot_minimal
-                        asyncio.run(bot_minimal.main())
-                    except Exception as e3:
+                    print(f"❌ Erreur Bot minimal: {e2}")
+                    sys.exit(1)
                         print(f"❌ Erreur Bot minimal: {e3}")
                         sys.exit(1)
         
@@ -75,12 +69,12 @@ if os.environ.get('RENDER'):
     else:
         print("🤖 Service Worker - Bot Telegram seulement")
         try:
-            import app
-            asyncio.run(app.run_telegram_bot())
+            import bot_fonctionnel
+            asyncio.run(bot_fonctionnel.main())
         except Exception as e:
             print(f"❌ Erreur Bot: {e}")
             sys.exit(1)
 else:
     print("🔧 Mode développement local")
-    import app
-    asyncio.run(app.run_telegram_bot())
+    import bot_fonctionnel
+    asyncio.run(bot_fonctionnel.main())
