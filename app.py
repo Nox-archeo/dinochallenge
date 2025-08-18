@@ -1505,11 +1505,7 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
             "payment_source": {
                 "paypal": {
                     "experience_context": {
-                        "payment_method_preference": "UNRESTRICTED",
-                        "brand_name": "Dino Challenge",
-                        "locale": "fr-CH",
-                        "shipping_preference": "NO_SHIPPING",
-                        "user_action": "PAY_NOW"
+                        "payment_method_preference": "UNRESTRICTED"
                     }
                 }
             },
