@@ -889,6 +889,28 @@ class DatabaseManager:
             logger.error(f"❌ Erreur récupération profil: {e}")
             return {}
 
+    def get_user_scores(self, telegram_id: int) -> list:
+        """Récupérer les scores d'un utilisateur"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT score, created_at FROM scores 
+                    WHERE telegram_id = %s 
+                    ORDER BY score DESC
+                """ if self.is_postgres else """
+                    SELECT score, created_at FROM scores 
+                    WHERE telegram_id = ? 
+                    ORDER BY score DESC
+                """, (telegram_id,))
+                
+                return [dict(row) for row in cursor.fetchall()]
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur récupération scores: {e}")
+            return []
+
     def update_user_profile(self, telegram_id: int, display_name: str = None, paypal_email: str = None) -> bool:
         """Mettre à jour le profil d'un utilisateur"""
         try:
