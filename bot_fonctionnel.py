@@ -43,7 +43,7 @@ class DinoBotFonctionnel:
         """Commande /start"""
         keyboard = [
             [InlineKeyboardButton("🎮 Jouer", callback_data="play")],
-            [InlineKeyboardButton("💳 S'abonner 10 CHF/mois", callback_data="payment")],
+            [InlineKeyboardButton("💳 S'abonner 11 CHF/mois", callback_data="payment")],
             [InlineKeyboardButton("🏆 Classement", callback_data="leaderboard")],
             [InlineKeyboardButton("👤 Mon Profil", callback_data="profile")],
             [InlineKeyboardButton("❓ Aide", callback_data="help")]
@@ -53,7 +53,7 @@ class DinoBotFonctionnel:
         await update.message.reply_text(
             "🦕 **DINO CHALLENGE BOT**\n\n"
             "🎯 Concours mensuel Chrome Dino Runner\n"
-            "💰 Abonnement: 10 CHF/mois\n"
+            "💰 Abonnement: 11 CHF/mois\n"
             "🎮 5 tentatives par jour\n"
             "🏆 Prix mensuels aux gagnants\n\n"
             "Choisissez une option:",
@@ -65,7 +65,7 @@ class DinoBotFonctionnel:
         """Commande /payment"""
         await update.message.reply_text(
             "💳 **ABONNEMENT DINO CHALLENGE**\n\n"
-            "💰 **Prix:** 10 CHF/mois\n"
+            "💰 **Prix:** 11 CHF/mois\n"
             "🎮 **Accès:** 5 tentatives par jour\n"
             "🏆 **Gains:** Participez aux prix mensuels\n\n"
             "🚧 **Paiement en cours d'implémentation**\n"
@@ -105,7 +105,7 @@ class DinoBotFonctionnel:
         await update.message.reply_text(
             "❓ **AIDE - DINO CHALLENGE**\n\n"
             "**🎯 Comment jouer:**\n"
-            "1. Abonnez-vous (10 CHF/mois)\n"
+            "1. Abonnez-vous (11 CHF/mois)\n"
             "2. Jouez jusqu'à 5 fois par jour\n"
             "3. Votre meilleur score compte\n"
             "4. Gagnez des prix chaque mois\n\n"

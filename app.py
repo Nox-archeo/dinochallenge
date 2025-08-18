@@ -1480,6 +1480,18 @@ def create_paypal_order(telegram_id: int, amount: Decimal, currency: str = 'CHF'
                 },
                 "description": f"Dino Challenge - Accès mensuel pour {datetime.now().strftime('%B %Y')}"
             }],
+            "payment_source": {
+                "paypal": {
+                    "experience_context": {
+                        "payment_method_preference": "UNRESTRICTED",
+                        "brand_name": "Dino Challenge",
+                        "locale": "fr-CH",
+                        "landing_page": "BILLING",
+                        "shipping_preference": "NO_SHIPPING",
+                        "user_action": "PAY_NOW"
+                    }
+                }
+            },
             "application_context": {
                 "brand_name": "Dino Challenge",
                 "locale": "fr-CH",
