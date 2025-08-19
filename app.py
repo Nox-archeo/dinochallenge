@@ -1148,10 +1148,23 @@ class DatabaseManager:
             return []
 
     def reset_monthly_leaderboard(self) -> bool:
-        """Reset du classement mensuel (appelé le 1er de chaque mois)"""
+        """Reset du classement mensuel et des accès (appelé le 1er de chaque mois)"""
         try:
             current_month = datetime.now().strftime('%Y-%m')
             logger.info(f"🔄 Reset du classement mensuel pour {current_month}")
+            
+            # Reset les accès payants pour le nouveau mois
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                if self.is_postgres:
+                    cursor.execute("UPDATE users SET has_paid_current_month = FALSE")
+                    revoked_count = cursor.rowcount
+                else:
+                    cursor.execute("UPDATE users SET has_paid_current_month = 0")
+                    revoked_count = cursor.rowcount
+                    
+                conn.commit()
+                logger.info(f"✅ Accès révoqués pour {revoked_count} utilisateurs")
             
             # Pas besoin de supprimer les scores, ils sont filtrés par month_year
             # Le nouveau mois commence automatiquement
@@ -2328,6 +2341,75 @@ def get_telegram_id_from_subscription(subscription_id):
     except Exception as e:
         logger.error(f"❌ Erreur get_telegram_id_from_subscription: {e}")
         return None
+
+def send_paypal_payout(paypal_email: str, amount: float, currency: str = 'CHF', description: str = ''):
+    """Envoyer un paiement PayPal Payout à un utilisateur"""
+    try:
+        logger.info(f"💸 Envoi payout PayPal - Email: {paypal_email}, Montant: {amount} {currency}")
+        
+        # Obtenir le token d'accès
+        access_token = get_paypal_access_token()
+        if not access_token:
+            return {'success': False, 'error': 'Erreur authentification PayPal'}
+        
+        # URL des payouts PayPal
+        url = f"{PAYPAL_BASE_URL}/v1/payments/payouts"
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {access_token}',
+        }
+        
+        # Générer un ID unique pour le batch
+        batch_id = f"DINO_PAYOUT_{int(datetime.now().timestamp())}"
+        
+        # Corps de la requête payout
+        payout_data = {
+            "sender_batch_header": {
+                "sender_batch_id": batch_id,
+                "email_subject": "Félicitations ! Votre gain Dino Challenge",
+                "email_message": f"Voici votre récompense du concours Dino Challenge : {amount} {currency}"
+            },
+            "items": [
+                {
+                    "recipient_type": "EMAIL",
+                    "amount": {
+                        "value": str(amount),
+                        "currency": currency
+                    },
+                    "receiver": paypal_email,
+                    "note": description or f"Gain Dino Challenge - {amount} {currency}",
+                    "sender_item_id": f"DINO_{int(datetime.now().timestamp())}"
+                }
+            ]
+        }
+        
+        logger.info(f"📤 Envoi payout PayPal: {payout_data}")
+        
+        response = requests.post(url, headers=headers, json=payout_data)
+        
+        logger.info(f"📥 Réponse payout - Status: {response.status_code}")
+        logger.info(f"📥 Réponse payout - Content: {response.text}")
+        
+        if response.status_code == 201:
+            result = response.json()
+            batch_id = result.get('batch_header', {}).get('payout_batch_id')
+            logger.info(f"✅ Payout envoyé avec succès - Batch ID: {batch_id}")
+            return {
+                'success': True,
+                'batch_id': batch_id,
+                'payout_batch_id': result.get('batch_header', {}).get('payout_batch_id'),
+                'batch_status': result.get('batch_header', {}).get('batch_status')
+            }
+        else:
+            error_details = response.json() if response.headers.get('content-type', '').startswith('application/json') else response.text
+            logger.error(f"❌ Erreur payout PayPal: {error_details}")
+            return {'success': False, 'error': f'Erreur PayPal: {error_details}'}
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur send_paypal_payout: {e}")
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return {'success': False, 'error': str(e)}
 
 # =============================================================================
 # BOT TELEGRAM
@@ -3718,10 +3800,35 @@ async def notify_monthly_winners():
                 text += f"💰 **Votre gain :** {winner['prize']:.2f} CHF\n\n"
                 
                 if profile and profile.get('paypal_email'):
-                    text += f"💳 **Paiement PayPal**\n"
-                    text += f"📧 Envoyé à : {profile['paypal_email']}\n"
-                    text += f"⏰ Délai : 2-3 jours ouvrables\n\n"
-                    text += f"✅ Votre gain sera automatiquement transféré sur votre compte PayPal.\n"
+                    # ENVOYER LE PAYOUT PAYPAL AUTOMATIQUEMENT
+                    try:
+                        payout_result = send_paypal_payout(
+                            paypal_email=profile['paypal_email'],
+                            amount=winner['prize'],
+                            currency='CHF',
+                            description=f"Gain Dino Challenge {month_formatted} - {position_text}"
+                        )
+                        
+                        if payout_result['success']:
+                            logger.info(f"💸 Payout PayPal envoyé avec succès à {profile['paypal_email']} - Batch: {payout_result.get('batch_id')}")
+                            text += f"💳 **Paiement PayPal envoyé !**\n"
+                            text += f"📧 Transféré à : {profile['paypal_email']}\n"
+                            text += f"🔄 ID de transfert : {payout_result.get('batch_id', 'N/A')}\n"
+                            text += f"⏰ Délai de traitement : 2-3 jours ouvrables\n\n"
+                            text += f"✅ Votre gain a été automatiquement transféré !\n"
+                        else:
+                            logger.error(f"❌ Échec payout PayPal pour {profile['paypal_email']}: {payout_result['error']}")
+                            text += f"💳 **Paiement PayPal en cours...**\n"
+                            text += f"📧 Destination : {profile['paypal_email']}\n"
+                            text += f"⚠️ Transfert en cours de traitement\n"
+                            text += f"📞 Contactez @Lilith66store si vous ne recevez pas le paiement sous 48h\n\n"
+                            
+                    except Exception as payout_error:
+                        logger.error(f"❌ Erreur lors du payout PayPal: {payout_error}")
+                        text += f"💳 **Paiement PayPal programmé**\n"
+                        text += f"📧 Sera envoyé à : {profile['paypal_email']}\n"
+                        text += f"⏰ Traitement manuel en cours\n"
+                        text += f"📞 Contactez @Lilith66store pour le suivi\n\n"
                 else:
                     text += f"⚠️ **Action requise :**\n"
                     text += f"Veuillez configurer votre email PayPal avec /profile pour recevoir votre gain.\n"
