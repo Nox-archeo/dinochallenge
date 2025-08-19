@@ -517,14 +517,14 @@
                     if (!accessCheck.access_granted) {
                         console.log('❌ Accès refusé:', accessCheck.error);
                         
-                        // Utiliser le message spécifique de l'API selon le type d'erreur
+                        // CORRECTION: Messages différenciés selon statut payant
                         let displayMessage;
                         if (accessCheck.limit_reached && accessCheck.message) {
-                            // Utilisateur payant qui a atteint sa limite quotidienne - utiliser le message spécialisé
-                            displayMessage = `🚫 ${accessCheck.message}<br>🔄 Revenez demain pour 5 nouvelles parties!`;
+                            // Utilisateur PAYANT qui a atteint sa limite quotidienne
+                            displayMessage = `🚫 Limite quotidienne atteinte<br>🔄 Revenez demain pour 5 nouvelles parties!`;
                         } else {
-                            // Utilisateur non payant ou autre erreur d'accès
-                            displayMessage = `❌ ${accessCheck.error || 'Accès refusé'}<br>💰 Effectuez un paiement pour jouer en mode compétition`;
+                            // Utilisateur NON-PAYANT ou erreur d'accès
+                            displayMessage = `❌ Accès refusé<br>💰 Effectuez un paiement pour jouer en mode compétition`;
                         }
                         
                         showScoreMessage(displayMessage);
@@ -735,14 +735,14 @@
                                 if (!accessCheck.access_granted) {
                                     console.log('❌ Accès refusé (onKeyDown):', accessCheck.error);
                                     
-                                    // Utiliser le message spécifique de l'API selon le type d'erreur
+                                    // CORRECTION: Messages différenciés selon statut payant  
                                     let displayMessage;
                                     if (accessCheck.limit_reached && accessCheck.message) {
-                                        // Utilisateur payant qui a atteint sa limite quotidienne - utiliser le message spécialisé
-                                        displayMessage = `🚫 ${accessCheck.message}<br>🔄 Revenez demain pour 5 nouvelles parties!`;
+                                        // Utilisateur PAYANT qui a atteint sa limite quotidienne
+                                        displayMessage = `🚫 Limite quotidienne atteinte<br>🔄 Revenez demain pour 5 nouvelles parties!`;
                                     } else {
-                                        // Utilisateur non payant ou autre erreur d'accès
-                                        displayMessage = `❌ ${accessCheck.error || 'Accès refusé'}<br>💰 Effectuez un paiement pour jouer en mode compétition`;
+                                        // Utilisateur NON-PAYANT ou erreur d'accès
+                                        displayMessage = `❌ Accès refusé<br>💰 Effectuez un paiement pour jouer en mode compétition`;
                                     }
                                     
                                     showScoreMessage(displayMessage);
@@ -3107,11 +3107,11 @@ function hookRestart() {
             
             if (accessCheck.limit_reached && accessCheck.message) {
                 console.log('❌ Limite quotidienne atteinte pour utilisateur payant');
-                showScoreMessage(`🚫 ${accessCheck.message}<br>🔄 Revenez demain pour 5 nouvelles parties!`);
+                showScoreMessage(`🚫 Limite quotidienne atteinte<br>🔄 Revenez demain pour 5 nouvelles parties!`);
                 return;
             } else if (accessCheck.limit_reached) {
-                console.log('❌ Limite quotidienne atteinte ou accès refusé');
-                showScoreMessage(`❌ ${accessCheck.error || 'Accès refusé'}<br>💰 Effectuez un paiement pour jouer en mode compétition`);
+                console.log('❌ Accès refusé pour utilisateur non-payant');
+                showScoreMessage(`❌ Accès refusé<br>💰 Effectuez un paiement pour jouer en mode compétition`);
                 return;
             }
             
