@@ -3048,7 +3048,14 @@ function initGameAPI() {
             if (result.access_granted) {
                 showScoreMessage(`✅ Accès accordé!<br>🎮 Parties restantes: ${result.remaining_games}/5`);
             } else {
-                showScoreMessage(`❌ ${result.error || 'Accès premium requis'}<br>💰 Effectuez un paiement pour jouer`);
+                // CORRECTION: Messages différenciés selon statut payant
+                if (result.limit_reached && result.message) {
+                    // Utilisateur PAYANT qui a atteint sa limite quotidienne
+                    showScoreMessage(`🚫 Limite quotidienne atteinte<br>🔄 Revenez demain pour 5 nouvelles parties!`);
+                } else {
+                    // Utilisateur NON-PAYANT ou erreur d'accès
+                    showScoreMessage(`❌ Accès refusé<br>💰 Effectuez un paiement pour jouer en mode compétition`);
+                }
             }
         }).catch(error => {
             console.error('❌ Erreur vérification accès:', error);
@@ -3101,7 +3108,18 @@ function hookRestart() {
             
             if (!accessCheck.access_granted) {
                 console.log('❌ Accès refusé:', accessCheck.error);
-                showScoreMessage(`❌ ${accessCheck.error || accessCheck.message || 'Accès refusé'}`);
+                
+                // CORRECTION: Messages différenciés selon statut payant
+                let displayMessage;
+                if (accessCheck.limit_reached && accessCheck.message) {
+                    // Utilisateur PAYANT qui a atteint sa limite quotidienne
+                    displayMessage = `🚫 Limite quotidienne atteinte<br>🔄 Revenez demain pour 5 nouvelles parties!`;
+                } else {
+                    // Utilisateur NON-PAYANT ou erreur d'accès
+                    displayMessage = `❌ Accès refusé<br>💰 Effectuez un paiement pour jouer en mode compétition`;
+                }
+                
+                showScoreMessage(displayMessage);
                 return;
             }
             
