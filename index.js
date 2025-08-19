@@ -2942,9 +2942,15 @@ async function submitScore(score) {
             }
         } else {
             console.error('❌ Erreur envoi score:', data.error);
-            if (data.error.includes('premium')) {
-                showScoreMessage(`❌ Accès premium requis<br>💰 Effectuez un paiement pour jouer en mode classé`);
-            } else if (data.error.includes('limite')) {
+            // CORRECTION: Messages différenciés selon statut payant
+            if (data.limit_reached && data.message) {
+                // Utilisateur PAYANT qui a atteint sa limite quotidienne
+                showScoreMessage(`🚫 Limite quotidienne atteinte<br>🔄 Revenez demain pour 5 nouvelles parties`);
+            } else if (data.error && data.error.includes('premium')) {
+                // Utilisateur NON-PAYANT
+                showScoreMessage(`❌ Accès refusé<br>💰 Effectuez un paiement pour jouer en mode compétition`);
+            } else if (data.error && data.error.includes('limite')) {
+                // Fallback pour limite quotidienne
                 showScoreMessage(`🚫 Limite quotidienne atteinte<br>🔄 Revenez demain pour 5 nouvelles parties`);
             } else {
                 showScoreMessage(`❌ Erreur: ${data.error}`);
@@ -3164,3 +3170,4 @@ function onDocumentLoad() {
 
 document.addEventListener('DOMContentLoaded', onDocumentLoad);
 // Force deploy Tue Aug 19 11:49:58 CEST 2025
+// Force cache busting Tue Aug 19 12:43:40 CEST 2025
