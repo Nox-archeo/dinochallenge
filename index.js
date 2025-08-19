@@ -519,9 +519,9 @@
                         
                         // Utiliser le message spécifique de l'API selon le type d'erreur
                         let displayMessage;
-                        if (accessCheck.limit_reached) {
-                            // Utilisateur payant qui a atteint sa limite quotidienne
-                            displayMessage = `🚫 ${accessCheck.message || 'Limite quotidienne atteinte'}<br>🔄 Revenez demain pour 5 nouvelles parties!`;
+                        if (accessCheck.limit_reached && accessCheck.message) {
+                            // Utilisateur payant qui a atteint sa limite quotidienne - utiliser le message spécialisé
+                            displayMessage = `🚫 ${accessCheck.message}<br>🔄 Revenez demain pour 5 nouvelles parties!`;
                         } else {
                             // Utilisateur non payant ou autre erreur d'accès
                             displayMessage = `❌ ${accessCheck.error || 'Accès refusé'}<br>💰 Effectuez un paiement pour jouer en mode compétition`;
@@ -737,9 +737,9 @@
                                     
                                     // Utiliser le message spécifique de l'API selon le type d'erreur
                                     let displayMessage;
-                                    if (accessCheck.limit_reached) {
-                                        // Utilisateur payant qui a atteint sa limite quotidienne
-                                        displayMessage = `🚫 ${accessCheck.message || 'Limite quotidienne atteinte'}<br>🔄 Revenez demain pour 5 nouvelles parties!`;
+                                    if (accessCheck.limit_reached && accessCheck.message) {
+                                        // Utilisateur payant qui a atteint sa limite quotidienne - utiliser le message spécialisé
+                                        displayMessage = `🚫 ${accessCheck.message}<br>🔄 Revenez demain pour 5 nouvelles parties!`;
                                     } else {
                                         // Utilisateur non payant ou autre erreur d'accès
                                         displayMessage = `❌ ${accessCheck.error || 'Accès refusé'}<br>💰 Effectuez un paiement pour jouer en mode compétition`;
@@ -3105,9 +3105,13 @@ function hookRestart() {
                 return;
             }
             
-            if (accessCheck.limit_reached) {
-                console.log('❌ Limite quotidienne atteinte');
-                showScoreMessage(`❌ ${accessCheck.message || 'Limite quotidienne atteinte'}`);
+            if (accessCheck.limit_reached && accessCheck.message) {
+                console.log('❌ Limite quotidienne atteinte pour utilisateur payant');
+                showScoreMessage(`🚫 ${accessCheck.message}<br>🔄 Revenez demain pour 5 nouvelles parties!`);
+                return;
+            } else if (accessCheck.limit_reached) {
+                console.log('❌ Limite quotidienne atteinte ou accès refusé');
+                showScoreMessage(`❌ ${accessCheck.error || 'Accès refusé'}<br>💰 Effectuez un paiement pour jouer en mode compétition`);
                 return;
             }
             
