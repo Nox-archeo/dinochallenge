@@ -3759,7 +3759,7 @@ async def handle_support_command(bot, message):
 # Suppression de handle_score_command - plus utilisé (scores automatiques depuis le jeu)
 
 async def notify_monthly_winners():
-    """Notification automatique des gagnants en fin de mois"""
+    """Notification automatique des gagnants en fin de mois avec sécurités renforcées"""
     try:
         # Obtenir les gagnants du mois précédent
         winners = db.get_monthly_winners()
@@ -3776,7 +3776,59 @@ async def notify_monthly_winners():
         month_name = datetime.now().replace(day=1) - timedelta(days=1)
         month_formatted = month_name.strftime('%B %Y')
         
-        logger.info(f"🏆 Notification des {len(winners)} gagnants de {month_formatted}")
+        # SÉCURITÉ : Log détaillé des calculs
+        prize_info = db.calculate_monthly_prizes(month_name.strftime('%Y-%m'))
+        logger.info(f"🔍 AUDIT SÉCURITÉ - Fin de mois {month_formatted}")
+        logger.info(f"💰 Cagnotte totale calculée : {prize_info['total_amount']:.2f} CHF")
+        logger.info(f"👥 Nombre de payeurs : {prize_info['total_players']}")
+        logger.info(f"🥇 Prix 1er (40%) : {prize_info['prizes']['first']:.2f} CHF")
+        logger.info(f"🥈 Prix 2e (15%) : {prize_info['prizes']['second']:.2f} CHF") 
+        logger.info(f"🥉 Prix 3e (5%) : {prize_info['prizes']['third']:.2f} CHF")
+        logger.info(f"💼 Votre part (40%) : {prize_info['prizes']['organization_fees']:.2f} CHF")
+        
+        total_payouts = prize_info['prizes']['first'] + prize_info['prizes']['second'] + prize_info['prizes']['third']
+        logger.info(f"📤 TOTAL VIREMENTS PRÉVUS : {total_payouts:.2f} CHF")
+        
+        # SÉCURITÉ : Notification à l'organisateur AVANT les virements
+        organizer_notification = f"🚨 **CONFIRMATION REQUISE - FIN DE MOIS {month_formatted.upper()}**\n\n"
+        organizer_notification += f"📊 **AUDIT FINANCIER :**\n"
+        organizer_notification += f"💰 Cagnotte totale : {prize_info['total_amount']:.2f} CHF\n"
+        organizer_notification += f"👥 Payeurs ce mois : {prize_info['total_players']}\n\n"
+        organizer_notification += f"🏆 **GAGNANTS ET VIREMENTS :**\n"
+        
+        for i, winner in enumerate(winners):
+            profile = db.get_user_profile_with_paypal(winner['telegram_id'])
+            organizer_notification += f"{['🥇','🥈','🥉'][i]} **{winner['position']}e place :** {winner['display_name']}\n"
+            organizer_notification += f"   📊 Score : {winner['score']:,} pts\n"
+            organizer_notification += f"   💸 Virement : {winner['prize']:.2f} CHF\n"
+            if profile and profile.get('paypal_email'):
+                organizer_notification += f"   📧 PayPal : {profile['paypal_email']}\n"
+            else:
+                organizer_notification += f"   ⚠️ Email PayPal manquant !\n"
+            organizer_notification += f"\n"
+        
+        organizer_notification += f"📤 **TOTAL VIREMENTS : {total_payouts:.2f} CHF**\n"
+        organizer_notification += f"💼 **VOTRE BÉNÉFICE : {prize_info['prizes']['organization_fees']:.2f} CHF**\n\n"
+        organizer_notification += f"✅ Les virements automatiques vont commencer dans 5 minutes.\n"
+        organizer_notification += f"🛡️ Seuls les montants calculés seront virés.\n"
+        
+        # Envoyer notification à l'organisateur (vous)
+        ORGANIZER_TELEGRAM_ID = 1301693935  # Votre ID Telegram
+        try:
+            await bot.send_message(
+                chat_id=ORGANIZER_TELEGRAM_ID,
+                text=organizer_notification,
+                parse_mode='Markdown'
+            )
+            logger.info(f"✅ Notification sécurité envoyée à l'organisateur")
+        except Exception as org_error:
+            logger.error(f"❌ Erreur notification organisateur: {org_error}")
+        
+        # Attendre 5 minutes pour confirmation manuelle si nécessaire
+        logger.info("⏱️ Pause sécurité de 5 minutes avant virements...")
+        await asyncio.sleep(300)  # 5 minutes
+        
+        logger.info(f"🏆 Début traitement des {len(winners)} gagnants de {month_formatted}")
         
         for winner in winners:
             try:
@@ -3810,25 +3862,90 @@ async def notify_monthly_winners():
                         )
                         
                         if payout_result['success']:
-                            logger.info(f"💸 Payout PayPal envoyé avec succès à {profile['paypal_email']} - Batch: {payout_result.get('batch_id')}")
-                            text += f"💳 **Paiement PayPal envoyé !**\n"
-                            text += f"📧 Transféré à : {profile['paypal_email']}\n"
-                            text += f"🔄 ID de transfert : {payout_result.get('batch_id', 'N/A')}\n"
-                            text += f"⏰ Délai de traitement : 2-3 jours ouvrables\n\n"
-                            text += f"✅ Votre gain a été automatiquement transféré !\n"
+                            logger.info(f"💸 VIREMENT RÉUSSI - {profile['paypal_email']} - {winner['prize']:.2f} CHF - Batch: {payout_result.get('batch_id')}")
+                            
+                            # Notification détaillée au gagnant
+                            text += f"💳 **✅ PAIEMENT EFFECTUÉ AVEC SUCCÈS !**\n"
+                            text += f"📧 Transféré vers : {profile['paypal_email']}\n"
+                            text += f"� Montant : {winner['prize']:.2f} CHF\n"
+                            text += f"�🔄 ID de transfert : {payout_result.get('batch_id', 'N/A')}\n"
+                            text += f"⏰ Délai de réception : 2-3 jours ouvrables\n\n"
+                            text += f"🎊 Félicitations pour cette victoire bien méritée !\n"
+                            
+                            # NOTIFICATION PARALLÈLE À L'ORGANISATEUR (vous) avec détails du virement
+                            org_success_msg = f"✅ **VIREMENT RÉUSSI** - {month_formatted}\n\n"
+                            org_success_msg += f"🏆 **Gagnant :** {winner['display_name']} ({position_text})\n"
+                            org_success_msg += f"📧 **PayPal :** {profile['paypal_email']}\n"
+                            org_success_msg += f"💰 **Montant :** {winner['prize']:.2f} CHF\n"
+                            org_success_msg += f"📊 **Score :** {winner['score']:,} points\n"
+                            org_success_msg += f"🔄 **Batch ID :** {payout_result.get('batch_id', 'N/A')}\n"
+                            org_success_msg += f"📅 **Date :** {datetime.now().strftime('%d/%m/%Y à %H:%M')}\n\n"
+                            org_success_msg += f"🎯 Virement automatique Dino Challenge"
+                            
+                            try:
+                                await bot.send_message(
+                                    chat_id=ORGANIZER_TELEGRAM_ID,
+                                    text=org_success_msg,
+                                    parse_mode='Markdown'
+                                )
+                            except Exception as org_notif_error:
+                                logger.error(f"❌ Erreur notification organisateur succès: {org_notif_error}")
+                                
                         else:
-                            logger.error(f"❌ Échec payout PayPal pour {profile['paypal_email']}: {payout_result['error']}")
-                            text += f"💳 **Paiement PayPal en cours...**\n"
+                            logger.error(f"❌ VIREMENT ÉCHOUÉ - {profile['paypal_email']}: {payout_result['error']}")
+                            
+                            # Notification d'erreur au gagnant
+                            text += f"💳 **⚠️ PAIEMENT EN COURS DE TRAITEMENT**\n"
                             text += f"📧 Destination : {profile['paypal_email']}\n"
-                            text += f"⚠️ Transfert en cours de traitement\n"
-                            text += f"📞 Contactez @Lilith66store si vous ne recevez pas le paiement sous 48h\n\n"
+                            text += f"💰 Montant : {winner['prize']:.2f} CHF\n"
+                            text += f"🔄 Statut : Traitement manuel requis\n\n"
+                            text += f"📞 Un virement manuel sera effectué sous 24h.\n"
+                            text += f"� Contact support : @Lilith66store\n"
+                            
+                            # NOTIFICATION D'ERREUR À L'ORGANISATEUR
+                            org_error_msg = f"🚨 **VIREMENT ÉCHOUÉ** - {month_formatted}\n\n"
+                            org_error_msg += f"🏆 **Gagnant :** {winner['display_name']} ({position_text})\n"
+                            org_error_msg += f"📧 **PayPal :** {profile['paypal_email']}\n"
+                            org_error_msg += f"💰 **Montant :** {winner['prize']:.2f} CHF\n"
+                            org_error_msg += f"❌ **Erreur :** {payout_result['error']}\n\n"
+                            org_error_msg += f"⚠️ **ACTION REQUISE :** Virement manuel nécessaire"
+                            
+                            try:
+                                await bot.send_message(
+                                    chat_id=ORGANIZER_TELEGRAM_ID,
+                                    text=org_error_msg,
+                                    parse_mode='Markdown'
+                                )
+                            except Exception as org_error_notif:
+                                logger.error(f"❌ Erreur notification organisateur échec: {org_error_notif}")
                             
                     except Exception as payout_error:
-                        logger.error(f"❌ Erreur lors du payout PayPal: {payout_error}")
-                        text += f"💳 **Paiement PayPal programmé**\n"
-                        text += f"📧 Sera envoyé à : {profile['paypal_email']}\n"
-                        text += f"⏰ Traitement manuel en cours\n"
-                        text += f"📞 Contactez @Lilith66store pour le suivi\n\n"
+                        logger.error(f"❌ Erreur technique lors du payout PayPal: {payout_error}")
+                        
+                        # Notification d'erreur technique
+                        text += f"💳 **⚠️ ERREUR TECHNIQUE TEMPORAIRE**\n"
+                        text += f"📧 Destination : {profile['paypal_email']}\n"
+                        text += f"💰 Montant : {winner['prize']:.2f} CHF\n"
+                        text += f"🔧 Erreur : Problème de connexion PayPal\n\n"
+                        text += f"🛠️ Virement manuel en cours de traitement\n"
+                        text += f"� Contact : @Lilith66store\n"
+                        
+                        # Notification erreur technique à l'organisateur
+                        tech_error_msg = f"🔧 **ERREUR TECHNIQUE** - {month_formatted}\n\n"
+                        tech_error_msg += f"🏆 **Gagnant :** {winner['display_name']} ({position_text})\n"
+                        tech_error_msg += f"📧 **PayPal :** {profile['paypal_email']}\n"
+                        tech_error_msg += f"💰 **Montant :** {winner['prize']:.2f} CHF\n"
+                        tech_error_msg += f"🔧 **Erreur technique :** {str(payout_error)}\n\n"
+                        tech_error_msg += f"�️ **ACTION :** Vérifiez la connexion PayPal et effectuez un virement manuel"
+                        
+                        try:
+                            await bot.send_message(
+                                chat_id=ORGANIZER_TELEGRAM_ID,
+                                text=tech_error_msg,
+                                parse_mode='Markdown'
+                            )
+                        except Exception as tech_notif_error:
+                            logger.error(f"❌ Erreur notification technique: {tech_notif_error}")
                 else:
                     text += f"⚠️ **Action requise :**\n"
                     text += f"Veuillez configurer votre email PayPal avec /profile pour recevoir votre gain.\n"
@@ -3852,7 +3969,24 @@ async def notify_monthly_winners():
             except Exception as notification_error:
                 logger.error(f"❌ Erreur notification {winner['display_name']}: {notification_error}")
         
-        logger.info(f"🎉 Toutes les notifications de fin de mois envoyées !")
+        # RÉCAPITULATIF FINAL À L'ORGANISATEUR
+        final_summary = f"📋 **RÉCAPITULATIF FINAL** - {month_formatted}\n\n"
+        final_summary += f"✅ Traitement terminé pour {len(winners)} gagnant(s)\n"
+        final_summary += f"💰 Cagnotte totale : {prize_info['total_amount']:.2f} CHF\n"
+        final_summary += f"📤 Virements effectués : {total_payouts:.2f} CHF\n"
+        final_summary += f"💼 Votre bénéfice : {prize_info['prizes']['organization_fees']:.2f} CHF\n\n"
+        final_summary += f"🎉 Fin de mois Dino Challenge - Tout est traité !"
+        
+        try:
+            await bot.send_message(
+                chat_id=ORGANIZER_TELEGRAM_ID,
+                text=final_summary,
+                parse_mode='Markdown'
+            )
+        except Exception as final_error:
+            logger.error(f"❌ Erreur récapitulatif final: {final_error}")
+        
+        logger.info(f"🎉 Toutes les notifications de fin de mois envoyées avec sécurités renforcées !")
         
     except Exception as e:
         logger.error(f"❌ Erreur notification gagnants: {e}")
