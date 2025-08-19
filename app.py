@@ -1194,6 +1194,41 @@ db = DatabaseManager(DATABASE_URL)
 # API WEB FLASK
 # =============================================================================
 
+@flask_app.route('/emergency-repair-margaux', methods=['GET'])
+def emergency_repair_margaux():
+    """RÉPARATION URGENTE - PROFIL MARGAUX"""
+    try:
+        telegram_id = 5932296330
+        
+        # Vérifier l'utilisateur
+        user = db.get_user_profile(telegram_id)
+        logger.info(f"🔍 Profil avant réparation: {user}")
+        
+        # Réparer le profil
+        success = db.update_user_profile(
+            telegram_id=telegram_id,
+            display_name="margaux", 
+            paypal_email="seb.chappss@gmail.com"
+        )
+        
+        # Vérifier l'accès payant
+        has_access = db.check_user_access(telegram_id)
+        
+        # Vérifier les scores
+        scores = db.get_user_scores(telegram_id)
+        
+        return {
+            'success': True,
+            'profile_updated': success,
+            'has_access': has_access,
+            'scores_count': len(scores) if scores else 0,
+            'message': 'Profil margaux réparé!'
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur réparation: {e}")
+        return {'success': False, 'error': str(e)}
+
 @flask_app.route('/health', methods=['GET'])
 def health_check():
     """Point de santé pour Render"""
