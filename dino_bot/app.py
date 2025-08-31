@@ -1125,6 +1125,13 @@ async def distribute_monthly_prizes():
         except Exception as e:
             logger.error(f"❌ Erreur remise à zéro des scores: {e}")
         
+        # Expirer les accès du mois précédent (paiements uniques seulement)
+        try:
+            await expire_monthly_access()
+            logger.info("🔒 Accès mensuels expirés")
+        except Exception as e:
+            logger.error(f"❌ Erreur expiration accès: {e}")
+        
         logger.info("🏆 FIN - Distribution automatique terminée")
         
     except Exception as e:
@@ -1829,6 +1836,79 @@ async def run_telegram_bot():
             await app.run_polling(drop_pending_updates=True)
     except Exception as e:
         logger.error(f"❌ Erreur bot Telegram: {e}")
+
+async def expire_monthly_access():
+    """Expirer les accès mensuels (paiements uniques seulement) du mois précédent"""
+    try:
+        # Obtenir le mois précédent
+        now = datetime.now()
+        if now.month == 1:
+            prev_month = 12
+            prev_year = now.year - 1
+        else:
+            prev_month = now.month - 1
+            prev_year = now.year
+        
+        prev_month_str = f"{prev_year}-{str(prev_month).zfill(2)}"
+        
+        # Marquer les paiements uniques du mois précédent comme expirés
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Obtenir les utilisateurs qui avaient un accès le mois précédent (paiement unique seulement)
+            cursor.execute("""
+                SELECT DISTINCT telegram_id FROM payments 
+                WHERE month_year = %s AND status = 'completed'
+                AND telegram_id NOT IN (
+                    SELECT telegram_id FROM subscriptions WHERE status = 'active'
+                )
+            """ if db.is_postgres else """
+                SELECT DISTINCT telegram_id FROM payments 
+                WHERE month_year = ? AND status = 'completed'
+                AND telegram_id NOT IN (
+                    SELECT telegram_id FROM subscriptions WHERE status = 'active'
+                )
+            """, (prev_month_str,))
+            
+            expired_users = cursor.fetchall()
+            
+            # Marquer comme expirés
+            cursor.execute("""
+                UPDATE payments SET status = 'expired' 
+                WHERE month_year = %s AND status = 'completed'
+                AND telegram_id NOT IN (
+                    SELECT telegram_id FROM subscriptions WHERE status = 'active'
+                )
+            """ if db.is_postgres else """
+                UPDATE payments SET status = 'expired' 
+                WHERE month_year = ? AND status = 'completed'
+                AND telegram_id NOT IN (
+                    SELECT telegram_id FROM subscriptions WHERE status = 'active'
+                )
+            """, (prev_month_str,))
+            
+            conn.commit()
+        
+        # Notifier les utilisateurs que leur accès a expiré (sauf abonnés)
+        for user_row in expired_users:
+            telegram_id = user_row[0] if db.is_postgres else user_row["telegram_id"]
+            try:
+                message = "⏰ ACCÈS EXPIRÉ\n\n"
+                message += f"Votre accès au Dino Challenge du mois précédent a expiré.\n\n"
+                message += f"💰 Pour continuer à jouer ce mois, utilisez /payment\n"
+                message += f"🔄 Pour un accès permanent, choisissez l'abonnement mensuel !"
+                
+                await telegram_app.bot.send_message(
+                    chat_id=telegram_id,
+                    text=message
+                )
+            except Exception as e:
+                logger.error(f"❌ Erreur notification expiration pour {telegram_id}: {e}")
+        
+        logger.info(f"🔒 {len(expired_users)} accès expirés pour {prev_month_str}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur expire_monthly_access: {e}")
 
 async def monthly_prize_checker():
     """Vérificateur quotidien pour la distribution automatique"""
