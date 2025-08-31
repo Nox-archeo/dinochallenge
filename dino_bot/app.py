@@ -995,6 +995,177 @@ async def notify_payment_success(telegram_id: int, amount: Decimal, payment_type
     except Exception as e:
         logger.error(f"❌ Erreur notification paiement: {e}")
 
+# =============================================================================
+# DISTRIBUTION AUTOMATIQUE MENSUELLE
+# =============================================================================
+
+async def distribute_monthly_prizes():
+    """Distribution automatique des prix mensuels - Le 1er de chaque mois à 00:01"""
+    try:
+        logger.info("🏆 DÉBUT - Distribution automatique des prix mensuels")
+        
+        # Obtenir le mois précédent
+        now = datetime.now()
+        if now.month == 1:
+            prev_month = 12
+            prev_year = now.year - 1
+        else:
+            prev_month = now.month - 1
+            prev_year = now.year
+            
+        month_name = [
+            "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+            "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+        ][prev_month - 1]
+        
+        logger.info(f"📅 Distribution pour {month_name} {prev_year}")
+        
+        # Obtenir le top 3 du mois précédent
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT u.telegram_id, u.username, u.email, s.score, s.timestamp
+                FROM scores s
+                JOIN users u ON s.user_id = u.id
+                WHERE EXTRACT(MONTH FROM s.timestamp) = %s 
+                AND EXTRACT(YEAR FROM s.timestamp) = %s
+                ORDER BY s.score DESC
+                LIMIT 3
+            """ if db.is_postgres else """
+                SELECT u.telegram_id, u.username, u.email, s.score, s.timestamp
+                FROM scores s
+                JOIN users u ON s.user_id = u.id
+                WHERE strftime('%m', s.timestamp) = ? 
+                AND strftime('%Y', s.timestamp) = ?
+                ORDER BY s.score DESC
+                LIMIT 3
+            """, (str(prev_month).zfill(2), str(prev_year)))
+            
+            winners = cursor.fetchall()
+        
+        if not winners:
+            logger.info("❌ Aucun gagnant trouvé pour le mois précédent")
+            return
+        
+        # Prix par position
+        prizes = [
+            {"position": 1, "amount": Decimal("150.00"), "emoji": "🥇"},
+            {"position": 2, "amount": Decimal("100.00"), "emoji": "🥈"},
+            {"position": 3, "amount": Decimal("50.00"), "emoji": "🥉"}
+        ]
+        
+        # Distribuer les prix
+        for i, winner in enumerate(winners):
+            if i >= 3:  # Seulement le top 3
+                break
+                
+            prize = prizes[i]
+            telegram_id = winner[0] if db.is_postgres else winner["telegram_id"]
+            username = winner[1] if db.is_postgres else winner["username"]
+            email = winner[2] if db.is_postgres else winner["email"]
+            score = winner[3] if db.is_postgres else winner["score"]
+            
+            try:
+                # Envoyer le paiement PayPal
+                if email and PAYPAL_CLIENT_ID:
+                    payment_success = await send_paypal_payout(
+                        email, 
+                        prize["amount"], 
+                        f"Félicitations ! Prize Dino Challenge {month_name} {prev_year} - {prize['position']}ème place"
+                    )
+                    
+                    if payment_success:
+                        # Notifier le gagnant
+                        message = f"{prize['emoji']} FÉLICITATIONS !\n\n"
+                        message += f"🏆 Vous êtes {prize['position']}ème du classement {month_name} {prev_year} !\n"
+                        message += f"🎯 Score: {score:,} points\n"
+                        message += f"💰 Prix: {prize['amount']} CHF\n\n"
+                        message += f"💳 Le paiement PayPal a été envoyé à: {email}\n"
+                        message += f"🎉 Félicitations et merci de jouer !"
+                        
+                        await telegram_app.bot.send_message(
+                            chat_id=telegram_id,
+                            text=message
+                        )
+                        
+                        logger.info(f"✅ Prix envoyé à {username} ({prize['position']}ème place): {prize['amount']} CHF")
+                    else:
+                        logger.error(f"❌ Échec paiement PayPal pour {username}")
+                else:
+                    logger.warning(f"⚠️ Email manquant ou PayPal non configuré pour {username}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Erreur distribution pour {username}: {e}")
+        
+        # Notifier l'organisateur
+        try:
+            summary_message = f"📊 RÉSUMÉ DISTRIBUTION {month_name.upper()} {prev_year}\n\n"
+            for i, winner in enumerate(winners[:3]):
+                prize = prizes[i]
+                username = winner[1] if db.is_postgres else winner["username"]
+                score = winner[3] if db.is_postgres else winner["score"]
+                summary_message += f"{prize['emoji']} {prize['position']}ème: {username} - {score:,} pts - {prize['amount']} CHF\n"
+            
+            summary_message += f"\n✅ Distribution terminée automatiquement"
+            
+            await telegram_app.bot.send_message(
+                chat_id=ORGANIZER_CHAT_ID,
+                text=summary_message
+            )
+        except Exception as e:
+            logger.error(f"❌ Erreur notification organisateur: {e}")
+        
+        # Remettre les scores à zéro pour le nouveau mois
+        try:
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM scores")
+                conn.commit()
+            logger.info("🔄 Scores remis à zéro pour le nouveau mois")
+        except Exception as e:
+            logger.error(f"❌ Erreur remise à zéro des scores: {e}")
+        
+        logger.info("🏆 FIN - Distribution automatique terminée")
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur distribution automatique: {e}")
+
+async def send_paypal_payout(email: str, amount: Decimal, note: str) -> bool:
+    """Envoyer un paiement PayPal"""
+    try:
+        if not PAYPAL_CLIENT_ID or not PAYPAL_SECRET_KEY:
+            logger.error("❌ Configuration PayPal manquante")
+            return False
+        
+        payout = paypalrestsdk.Payout({
+            "sender_batch_header": {
+                "sender_batch_id": f"dino_prize_{int(time.time())}",
+                "email_subject": "Félicitations ! Votre prix Dino Challenge",
+                "email_message": note
+            },
+            "items": [{
+                "recipient_type": "EMAIL",
+                "amount": {
+                    "value": str(amount),
+                    "currency": "CHF"
+                },
+                "receiver": email,
+                "note": note,
+                "sender_item_id": f"item_{int(time.time())}"
+            }]
+        })
+        
+        if payout.create():
+            logger.info(f"✅ Payout PayPal créé: {payout.batch_header.payout_batch_id}")
+            return True
+        else:
+            logger.error(f"❌ Erreur création payout: {payout.error}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur send_paypal_payout: {e}")
+        return False
+
 async def notify_subscription_renewal(telegram_id: int, amount: Decimal):
     """Notifier le renouvellement d'abonnement"""
     try:
@@ -1276,6 +1447,153 @@ Pour toute question, contactez l'organisateur.
     
     await update.message.reply_text(message)
 
+async def admin_distribute_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande admin pour distribuer manuellement les prix"""
+    user_id = update.effective_user.id
+    
+    # Vérifier si c'est l'admin
+    if user_id != ORGANIZER_CHAT_ID:
+        await update.message.reply_text("❌ Accès refusé. Seul l'organisateur peut utiliser cette commande.")
+        return
+    
+    try:
+        # Récupérer le mois et l'année depuis les arguments
+        args = context.args
+        if len(args) != 2:
+            await update.message.reply_text(
+                "❌ Usage: /admin_distribute <mois> <année>\n"
+                "Exemple: /admin_distribute 8 2025 (pour août 2025)"
+            )
+            return
+        
+        month = int(args[0])
+        year = int(args[1])
+        
+        if month < 1 or month > 12:
+            await update.message.reply_text("❌ Le mois doit être entre 1 et 12")
+            return
+        
+        month_names = [
+            "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+            "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+        ]
+        month_name = month_names[month - 1]
+        
+        await update.message.reply_text(f"🏆 Démarrage distribution manuelle pour {month_name} {year}...")
+        
+        # Distribution manuelle
+        await distribute_monthly_prizes_manual(month, year, update)
+        
+    except ValueError:
+        await update.message.reply_text("❌ Mois et année doivent être des nombres")
+    except Exception as e:
+        logger.error(f"❌ Erreur admin_distribute: {e}")
+        await update.message.reply_text(f"❌ Erreur: {e}")
+
+async def distribute_monthly_prizes_manual(month: int, year: int, update: Update):
+    """Distribution manuelle des prix pour un mois/année spécifique"""
+    try:
+        month_names = [
+            "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+            "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+        ]
+        month_name = month_names[month - 1]
+        
+        logger.info(f"📅 Distribution manuelle pour {month_name} {year}")
+        
+        # Obtenir le top 3 du mois spécifique
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT u.telegram_id, u.username, u.email, s.score, s.timestamp
+                FROM scores s
+                JOIN users u ON s.user_id = u.id
+                WHERE EXTRACT(MONTH FROM s.timestamp) = %s 
+                AND EXTRACT(YEAR FROM s.timestamp) = %s
+                ORDER BY s.score DESC
+                LIMIT 3
+            """ if db.is_postgres else """
+                SELECT u.telegram_id, u.username, u.email, s.score, s.timestamp
+                FROM scores s
+                JOIN users u ON s.user_id = u.id
+                WHERE strftime('%m', s.timestamp) = ? 
+                AND strftime('%Y', s.timestamp) = ?
+                ORDER BY s.score DESC
+                LIMIT 3
+            """, (str(month).zfill(2), str(year)))
+            
+            winners = cursor.fetchall()
+        
+        if not winners:
+            await update.message.reply_text(f"❌ Aucun gagnant trouvé pour {month_name} {year}")
+            return
+        
+        # Prix par position
+        prizes = [
+            {"position": 1, "amount": Decimal("150.00"), "emoji": "🥇"},
+            {"position": 2, "amount": Decimal("100.00"), "emoji": "🥈"},
+            {"position": 3, "amount": Decimal("50.00"), "emoji": "🥉"}
+        ]
+        
+        await update.message.reply_text(f"📊 Gagnants trouvés pour {month_name} {year}:")
+        
+        # Distribuer les prix
+        for i, winner in enumerate(winners):
+            if i >= 3:  # Seulement le top 3
+                break
+                
+            prize = prizes[i]
+            telegram_id = winner[0] if db.is_postgres else winner["telegram_id"]
+            username = winner[1] if db.is_postgres else winner["username"]
+            email = winner[2] if db.is_postgres else winner["email"]
+            score = winner[3] if db.is_postgres else winner["score"]
+            
+            await update.message.reply_text(
+                f"{prize['emoji']} {prize['position']}ème: {username} - {score:,} pts - {prize['amount']} CHF"
+            )
+            
+            try:
+                # Envoyer le paiement PayPal
+                if email and PAYPAL_CLIENT_ID:
+                    payment_success = await send_paypal_payout(
+                        email, 
+                        prize["amount"], 
+                        f"Félicitations ! Prize Dino Challenge {month_name} {year} - {prize['position']}ème place"
+                    )
+                    
+                    if payment_success:
+                        # Notifier le gagnant
+                        message = f"{prize['emoji']} FÉLICITATIONS !\n\n"
+                        message += f"🏆 Vous êtes {prize['position']}ème du classement {month_name} {year} !\n"
+                        message += f"🎯 Score: {score:,} points\n"
+                        message += f"💰 Prix: {prize['amount']} CHF\n\n"
+                        message += f"💳 Le paiement PayPal a été envoyé à: {email}\n"
+                        message += f"🎉 Félicitations et merci de jouer !"
+                        
+                        await telegram_app.bot.send_message(
+                            chat_id=telegram_id,
+                            text=message
+                        )
+                        
+                        await update.message.reply_text(f"✅ Paiement envoyé à {username}")
+                        logger.info(f"✅ Prix envoyé à {username} ({prize['position']}ème place): {prize['amount']} CHF")
+                    else:
+                        await update.message.reply_text(f"❌ Échec paiement PayPal pour {username}")
+                        logger.error(f"❌ Échec paiement PayPal pour {username}")
+                else:
+                    await update.message.reply_text(f"⚠️ Email manquant ou PayPal non configuré pour {username}")
+                    logger.warning(f"⚠️ Email manquant ou PayPal non configuré pour {username}")
+                    
+            except Exception as e:
+                await update.message.reply_text(f"❌ Erreur pour {username}: {e}")
+                logger.error(f"❌ Erreur distribution pour {username}: {e}")
+        
+        await update.message.reply_text(f"🏆 Distribution terminée pour {month_name} {year}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur distribution manuelle: {e}")
+        await update.message.reply_text(f"❌ Erreur: {e}")
+
 async def help_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Afficher l'aide sur le gameplay via callback"""
     query = update.callback_query
@@ -1447,6 +1765,7 @@ def setup_telegram_bot():
     telegram_app.add_handler(CommandHandler("profile", profile_handler))
     telegram_app.add_handler(CommandHandler("cancel_subscription", cancel_subscription_handler))
     telegram_app.add_handler(CommandHandler("help", help_handler))
+    telegram_app.add_handler(CommandHandler("admin_distribute", admin_distribute_handler))
     telegram_app.add_handler(CallbackQueryHandler(payment_callback_handler))
     
     # Ajouter un handler pour les messages texte (synchronisation avec bot principal)
@@ -1461,10 +1780,37 @@ async def run_telegram_bot():
         app = setup_telegram_bot()
         if app:
             await setup_bot_commands()
+            
+            # Démarrer la tâche de vérification automatique
+            asyncio.create_task(monthly_prize_checker())
+            
             logger.info("🤖 Démarrage du bot Telegram...")
             await app.run_polling(drop_pending_updates=True)
     except Exception as e:
         logger.error(f"❌ Erreur bot Telegram: {e}")
+
+async def monthly_prize_checker():
+    """Vérificateur quotidien pour la distribution automatique"""
+    last_distribution_month = None
+    
+    while True:
+        try:
+            now = datetime.now()
+            
+            # Vérifier si on est le 1er du mois et après 00:01
+            if (now.day == 1 and now.hour >= 0 and now.minute >= 1 and 
+                last_distribution_month != now.month):
+                
+                logger.info("🏆 DÉCLENCHEMENT - Distribution automatique des prix")
+                await distribute_monthly_prizes()
+                last_distribution_month = now.month
+            
+            # Attendre 1 heure avant la prochaine vérification
+            await asyncio.sleep(3600)
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur monthly_prize_checker: {e}")
+            await asyncio.sleep(3600)  # Attendre 1 heure en cas d'erreur
 
 def run_flask_app():
     """Exécuter l'API Flask"""

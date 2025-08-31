@@ -73,6 +73,7 @@ class DinoBot:
             BotCommand("setpaypal", "📧 Configurer email PayPal"),
             BotCommand("checkpayment", "💳 Vérifier mes paiements"),
             BotCommand("admin_prizes", "🎁 [ADMIN] Test distribution prix"),
+            BotCommand("admin_process_august", "💰 [ADMIN] Traiter prix août"),
         ]
         
         await self.application.bot.set_my_commands(commands)
@@ -97,6 +98,7 @@ class DinoBot:
         app.add_handler(CommandHandler("checkpayment", check_payment_handler))
         app.add_handler(CommandHandler("payments", payment_history_handler))
         app.add_handler(CommandHandler("admin_prizes", self._admin_prizes_handler))  # Commande admin
+        app.add_handler(CommandHandler("admin_process_august", self._process_august_prizes))  # Distribuer août manuellement
         
         # Handlers de callbacks (boutons inline)
         app.add_handler(CallbackQueryHandler(profile_callback_handler))
@@ -196,26 +198,42 @@ class DinoBot:
 """
                 
                 # Envoyer le message à l'organisateur (vous)
-                # Remplacez par votre ID Telegram
-                ORGANIZER_CHAT_ID = "VOTRE_ID_TELEGRAM"  # À remplacer par votre vraie ID
+                from app import ORGANIZER_CHAT_ID
                 
-                # Pour le moment, on log le message
+                # Logger le message
                 logger.info(f"Message pour l'organisateur:\n{message}")
                 
-                # TODO: Décommenter et mettre votre ID Telegram
-                # import asyncio
-                # asyncio.create_task(
-                #     self.application.bot.send_message(
-                #         chat_id=ORGANIZER_CHAT_ID,
-                #         text=message,
-                #         parse_mode='Markdown'
-                #     )
-                # )
+                # Envoyer le message à l'organisateur
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.create_task(
+                            self.application.bot.send_message(
+                                chat_id=ORGANIZER_CHAT_ID,
+                                text=message,
+                                parse_mode='Markdown'
+                            )
+                        )
+                    else:
+                        loop.run_until_complete(
+                            self.application.bot.send_message(
+                                chat_id=ORGANIZER_CHAT_ID,
+                                text=message,
+                                parse_mode='Markdown'
+                            )
+                        )
+                except Exception as e:
+                    logger.error(f"Erreur envoi message organisateur: {e}")
                 
                 # Notifier automatiquement les gagnants
                 self._notify_winners(leaderboard[:3], amounts)
                 
+                # IMPORTANT: Remettre la cagnotte à zéro après distribution
+                self._reset_monthly_data()
+                
                 logger.info(f"Distribution des prix préparée: {len(leaderboard[:3])} gagnants")
+                logger.info("Cagnotte remise à zéro pour le nouveau mois")
                 
             else:
                 logger.info("Aucun joueur à récompenser ce mois")
@@ -225,13 +243,126 @@ class DinoBot:
     
     async def _admin_prizes_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Commande admin pour tester la génération des prix"""
-        if update.effective_user.id != ORGANIZER_CHAT_ID:  # Remplacez par votre ID Telegram
+        from app import ORGANIZER_CHAT_ID
+        if update.effective_user.id != ORGANIZER_CHAT_ID:
             await update.message.reply_text("❌ Commande réservée à l'organisateur")
             return
             
         # Test avec des données fictives
         await self._test_monthly_prizes_distribution(context)
         await update.message.reply_text("✅ Test de distribution des prix terminé - vérifiez les logs pour voir le message qui serait envoyé")
+    
+    async def _process_august_prizes(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Traite manuellement les prix d'août 2025"""
+        from app import ORGANIZER_CHAT_ID
+        if update.effective_user.id != ORGANIZER_CHAT_ID:
+            await update.message.reply_text("❌ Commande réservée à l'organisateur")
+            return
+            
+        await update.message.reply_text("🔄 Traitement des prix d'août en cours...")
+        
+        try:
+            # Forcer la distribution pour août 2025
+            self._force_monthly_prizes_distribution("2025-08")
+            await update.message.reply_text("✅ Distribution des prix d'août terminée ! Vérifiez vos messages privés.")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Erreur: {str(e)}")
+            logger.error(f"Erreur traitement prix août: {e}")
+    
+    def _force_monthly_prizes_distribution(self, target_month_year: str):
+        """Force la distribution des prix pour un mois spécifique"""
+        try:
+            from services.game_manager import GameManager
+            
+            game_manager = GameManager()
+            
+            # Récupérer le classement pour le mois spécifié
+            leaderboard_info = game_manager.get_leaderboard_info(target_month_year)
+            leaderboard = leaderboard_info['leaderboard'] 
+            prize_pool = leaderboard_info['prize_pool']
+            
+            if len(leaderboard) >= 1:
+                # Préparer le message pour l'organisateur
+                message = f"""🏆 **DISTRIBUTION DES GAINS - {target_month_year.upper()}**
+
+💰 **Cagnotte totale :** {prize_pool} CHF
+👥 **Participants :** {len(leaderboard)} joueurs
+
+🎯 **GAGNANTS À PAYER :**
+"""
+                
+                # Calculer les montants
+                amounts = {
+                    1: int(prize_pool * 0.40),  # 40% pour le 1er
+                    2: int(prize_pool * 0.15),  # 15% pour le 2e  
+                    3: int(prize_pool * 0.05)   # 5% pour le 3e
+                }
+                
+                # Ajouter les gagnants au message
+                for i, player in enumerate(leaderboard[:3], 1):
+                    rank_emoji = ["🥇", "🥈", "🥉"][i-1]
+                    amount = amounts.get(i, 0)
+                    email = player.get('paypal_email', '❌ EMAIL MANQUANT')
+                    
+                    message += f"\n{rank_emoji} **#{i} - {player['name']}**"
+                    message += f"\n   📧 Email: `{email}`"
+                    message += f"\n   💰 Montant: **{amount} CHF**"
+                    message += f"\n   🎮 Score: {player['score']} pts\n"
+                
+                message += f"""
+📋 **INSTRUCTIONS :**
+1. Connectez-vous à PayPal
+2. Allez dans "Envoyer de l'argent"
+3. Copiez-collez les emails ci-dessus
+4. Envoyez les montants correspondants
+5. Le bot notifiera automatiquement les gagnants
+
+⚠️ **Traitement automatique pour {target_month_year}**
+"""
+                
+                # Envoyer le message à l'organisateur
+                from app import ORGANIZER_CHAT_ID
+                import asyncio
+                
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.create_task(
+                            self.application.bot.send_message(
+                                chat_id=ORGANIZER_CHAT_ID,
+                                text=message,
+                                parse_mode='Markdown'
+                            )
+                        )
+                    else:
+                        loop.run_until_complete(
+                            self.application.bot.send_message(
+                                chat_id=ORGANIZER_CHAT_ID,
+                                text=message,
+                                parse_mode='Markdown'
+                            )
+                        )
+                except Exception as e:
+                    logger.error(f"Erreur envoi message organisateur: {e}")
+                
+                # Notifier automatiquement les gagnants
+                self._notify_winners(leaderboard[:3], amounts)
+                
+                # Si c'est le mois courant, remettre la cagnotte à zéro
+                from utils.time_utils import get_current_month
+                current_month_str = f"{get_current_month()[1]}-{get_current_month()[0]:02d}"
+                if target_month_year == current_month_str:
+                    self._reset_monthly_data()
+                    logger.info("Cagnotte remise à zéro pour le nouveau mois")
+                
+                logger.info(f"Distribution forcée terminée pour {target_month_year}: {len(leaderboard[:3])} gagnants")
+                
+            else:
+                logger.info(f"Aucun joueur à récompenser pour {target_month_year}")
+                
+        except Exception as e:
+            logger.error(f"Erreur lors de la distribution forcée pour {target_month_year}: {e}")
+            raise e
         
     async def _test_monthly_prizes_distribution(self, context):
         """Version test de la distribution des prix avec données fictives"""
@@ -352,18 +483,53 @@ Email configuré : `{player.get('paypal_email', 'Non configuré')}`
                 # Envoyer le message au gagnant
                 user_id = player.get('user_id')
                 if user_id:
-                    # TODO: Implémenter l'envoi du message
-                    logger.info(f"Notification gagnant #{i}: {player['name']} ({user_id})")
-                    # asyncio.create_task(
-                    #     self.application.bot.send_message(
-                    #         chat_id=user_id,
-                    #         text=message,
-                    #         parse_mode='Markdown'
-                    #     )
-                    # )
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(
+                                self.application.bot.send_message(
+                                    chat_id=user_id,
+                                    text=message,
+                                    parse_mode='Markdown'
+                                )
+                            )
+                        else:
+                            loop.run_until_complete(
+                                self.application.bot.send_message(
+                                    chat_id=user_id,
+                                    text=message,
+                                    parse_mode='Markdown'
+                                )
+                            )
+                        logger.info(f"✅ Notification envoyée au gagnant #{i}: {player['name']}")
+                    except Exception as e:
+                        logger.error(f"❌ Erreur envoi notification gagnant #{i}: {e}")
                 
         except Exception as e:
             logger.error(f"Erreur lors de la notification des gagnants: {e}")
+    
+    def _reset_monthly_data(self):
+        """Remet à zéro les données mensuelles pour le nouveau mois"""
+        try:
+            from services.game_manager import GameManager
+            game_manager = GameManager()
+            
+            # Remettre à zéro les paiements du mois courant
+            with game_manager.get_db_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Remettre has_paid_current_month à False pour tous les utilisateurs
+                cursor.execute("UPDATE users SET has_paid_current_month = FALSE")
+                
+                # Remettre total_attempts_today à 0
+                cursor.execute("UPDATE users SET total_attempts_today = 0")
+                
+                conn.commit()
+                
+            logger.info("✅ Données mensuelles remises à zéro")
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur lors de la remise à zéro des données mensuelles: {e}")
     
     def _daily_cleanup(self):
         """Nettoyage quotidien des données"""
