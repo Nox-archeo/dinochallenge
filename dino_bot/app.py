@@ -507,6 +507,27 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
+@flask_app.route('/debug/commands', methods=['GET'])
+def debug_commands():
+    """Vérifier les commandes disponibles"""
+    try:
+        if telegram_app and telegram_app.bot:
+            commands_info = {
+                'admin_commands_loaded': True,
+                'organizer_id': ORGANIZER_CHAT_ID,
+                'paypal_mode': PAYPAL_MODE,
+                'commands': [
+                    '/admin_distribute',
+                    '/payout_august', 
+                    '/reset_scores'
+                ]
+            }
+            return jsonify(commands_info)
+        else:
+            return jsonify({'error': 'Bot not initialized'})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 @flask_app.route('/', methods=['GET'])
 def home():
     """Page d'accueil avec informations du bot"""
@@ -1816,6 +1837,8 @@ def setup_telegram_bot():
     telegram_app.add_handler(CommandHandler("reset_scores", admin_reset_scores_handler))
     telegram_app.add_handler(CallbackQueryHandler(payment_callback_handler))
     
+    logger.info("✅ Commandes admin ajoutées: admin_distribute, payout_august, reset_scores")
+    
     # Ajouter un handler pour les messages texte (synchronisation avec bot principal)
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     
@@ -1947,7 +1970,7 @@ def run_flask_app():
 
 def main():
     """Point d'entrée principal"""
-    logger.info("🦕 Démarrage du Dino Challenge Bot + API")
+    logger.info("🦕 Démarrage du Dino Challenge Bot + API v2.1")
     
     # Vérifier les variables d'environnement
     if not TELEGRAM_BOT_TOKEN:
@@ -1957,6 +1980,7 @@ def main():
     logger.info(f"📊 Base de données: {DATABASE_URL}")
     logger.info(f"🎮 Jeu: {GAME_URL}")
     logger.info(f"👤 Admin: {ORGANIZER_CHAT_ID}")
+    logger.info(f"💰 PayPal Mode: {PAYPAL_MODE}")
     
     try:
         # Démarrer Flask dans un thread séparé
