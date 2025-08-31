@@ -1594,6 +1594,42 @@ async def distribute_monthly_prizes_manual(month: int, year: int, update: Update
         logger.error(f"❌ Erreur distribution manuelle: {e}")
         await update.message.reply_text(f"❌ Erreur: {e}")
 
+async def admin_payout_august_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande rapide pour distribuer les prix d'août 2025"""
+    user_id = update.effective_user.id
+    
+    # Vérifier si c'est l'admin
+    if user_id != ORGANIZER_CHAT_ID:
+        await update.message.reply_text("❌ Accès refusé. Seul l'organisateur peut utiliser cette commande.")
+        return
+    
+    await update.message.reply_text("🏆 Démarrage distribution d'août 2025...")
+    await distribute_monthly_prizes_manual(8, 2025, update)
+
+async def admin_reset_scores_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande admin pour remettre les scores à zéro"""
+    user_id = update.effective_user.id
+    
+    # Vérifier si c'est l'admin
+    if user_id != ORGANIZER_CHAT_ID:
+        await update.message.reply_text("❌ Accès refusé. Seul l'organisateur peut utiliser cette commande.")
+        return
+    
+    try:
+        await update.message.reply_text("🔄 Remise à zéro des scores en cours...")
+        
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM scores")
+            conn.commit()
+        
+        await update.message.reply_text("✅ Tous les scores ont été remis à zéro !")
+        logger.info("🔄 Scores remis à zéro manuellement par l'admin")
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur reset scores: {e}")
+        await update.message.reply_text(f"❌ Erreur: {e}")
+
 async def help_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Afficher l'aide sur le gameplay via callback"""
     query = update.callback_query
@@ -1706,6 +1742,9 @@ async def setup_bot_commands():
         BotCommand("profile", "👤 Mon profil"),
         BotCommand("cancel_subscription", "❌ Annuler l'abonnement"),
         BotCommand("help", "❓ Aide et règles"),
+        BotCommand("admin_distribute", "🔧 [ADMIN] Distribuer prix manuellement"),
+        BotCommand("payout_august", "🚀 [ADMIN] Distribuer août 2025"),
+        BotCommand("reset_scores", "🔄 [ADMIN] Remettre scores à zéro"),
     ]
     
     await telegram_app.bot.set_my_commands(commands)
@@ -1766,6 +1805,8 @@ def setup_telegram_bot():
     telegram_app.add_handler(CommandHandler("cancel_subscription", cancel_subscription_handler))
     telegram_app.add_handler(CommandHandler("help", help_handler))
     telegram_app.add_handler(CommandHandler("admin_distribute", admin_distribute_handler))
+    telegram_app.add_handler(CommandHandler("payout_august", admin_payout_august_handler))
+    telegram_app.add_handler(CommandHandler("reset_scores", admin_reset_scores_handler))
     telegram_app.add_handler(CallbackQueryHandler(payment_callback_handler))
     
     # Ajouter un handler pour les messages texte (synchronisation avec bot principal)
