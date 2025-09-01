@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///dino_challenge.db')
 ORGANIZER_CHAT_ID = int(os.getenv('ORGANIZER_CHAT_ID', '123456789'))
+ADMIN_FREE_ACCESS = os.getenv('ADMIN_FREE_ACCESS', 'false').lower() == 'true'
 PORT = int(os.getenv('PORT', 5000))
 GAME_URL = os.getenv('GAME_URL', 'https://nox-archeo.github.io/dinochallenge/')
 
@@ -456,6 +457,10 @@ class DatabaseManager:
     def check_user_access(self, telegram_id: int) -> bool:
         """Vérifier si l'utilisateur a accès ce mois-ci"""
         try:
+            # Accès gratuit pour l'admin si activé
+            if ADMIN_FREE_ACCESS and telegram_id == ORGANIZER_CHAT_ID:
+                return True
+                
             current_month = datetime.now().strftime('%Y-%m')
             
             with self.get_connection() as conn:
