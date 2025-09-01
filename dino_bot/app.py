@@ -1073,19 +1073,39 @@ async def distribute_monthly_prizes():
             logger.info("❌ Aucun gagnant trouvé pour le mois précédent")
             return
         
-        # Prix par position
-        prizes = [
-            {"position": 1, "amount": Decimal("150.00"), "emoji": "🥇"},
-            {"position": 2, "amount": Decimal("100.00"), "emoji": "🥈"},
-            {"position": 3, "amount": Decimal("50.00"), "emoji": "🥉"}
-        ]
+        # Calculer la cagnotte totale du mois précédent
+        prev_month_str = f"{prev_year}-{str(prev_month).zfill(2)}"
+        
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM payments 
+                WHERE month_year = %s AND status = 'completed'
+            """ if db.is_postgres else """
+                SELECT COUNT(*) FROM payments 
+                WHERE month_year = ? AND status = 'completed'
+            """, (prev_month_str,))
+            
+            total_players = cursor.fetchone()[0]
+            prize_pool = total_players * float(MONTHLY_PRICE_CHF)
+        
+        logger.info(f"💰 Cagnotte {month_name} {prev_year}: {prize_pool} CHF ({total_players} joueurs)")
+        
+        # Calcul des prix par pourcentages (comme dans bot.py)
+        prizes = {
+            1: prize_pool * 0.40,  # 40% pour le 1er
+            2: prize_pool * 0.15,  # 15% pour le 2ème  
+            3: prize_pool * 0.05   # 5% pour le 3ème
+        }
         
         # Distribuer les prix
         for i, winner in enumerate(winners):
             if i >= 3:  # Seulement le top 3
                 break
                 
-            prize = prizes[i]
+            position = i + 1
+            amount = Decimal(str(prizes[position]))
+            emoji = ["🥇", "🥈", "🥉"][i]
             telegram_id = winner[0] if db.is_postgres else winner["telegram_id"]
             username = winner[1] if db.is_postgres else winner["username"]
             email = winner[2] if db.is_postgres else winner["email"]
@@ -1096,16 +1116,16 @@ async def distribute_monthly_prizes():
                 if email and PAYPAL_CLIENT_ID:
                     payment_success = await send_paypal_payout(
                         email, 
-                        prize["amount"], 
-                        f"Félicitations ! Prize Dino Challenge {month_name} {prev_year} - {prize['position']}ème place"
+                        amount, 
+                        f"Félicitations ! Prize Dino Challenge {month_name} {prev_year} - {position}ème place"
                     )
                     
                     if payment_success:
                         # Notifier le gagnant
-                        message = f"{prize['emoji']} FÉLICITATIONS !\n\n"
-                        message += f"🏆 Vous êtes {prize['position']}ème du classement {month_name} {prev_year} !\n"
+                        message = f"{emoji} FÉLICITATIONS !\n\n"
+                        message += f"🏆 Vous êtes {position}ème du classement {month_name} {prev_year} !\n"
                         message += f"🎯 Score: {score:,} points\n"
-                        message += f"💰 Prix: {prize['amount']} CHF\n\n"
+                        message += f"💰 Prix: {amount:.2f} CHF\n\n"
                         message += f"💳 Le paiement PayPal a été envoyé à: {email}\n"
                         message += f"🎉 Félicitations et merci de jouer !"
                         
@@ -1114,7 +1134,7 @@ async def distribute_monthly_prizes():
                             text=message
                         )
                         
-                        logger.info(f"✅ Prix envoyé à {username} ({prize['position']}ème place): {prize['amount']} CHF")
+                        logger.info(f"✅ Prix envoyé à {username} ({position}ème place): {amount:.2f} CHF")
                     else:
                         logger.error(f"❌ Échec paiement PayPal pour {username}")
                 else:
@@ -1127,10 +1147,24 @@ async def distribute_monthly_prizes():
         try:
             summary_message = f"📊 RÉSUMÉ DISTRIBUTION {month_name.upper()} {prev_year}\n\n"
             for i, winner in enumerate(winners[:3]):
-                prize = prizes[i]
                 username = winner[1] if db.is_postgres else winner["username"]
                 score = winner[3] if db.is_postgres else winner["score"]
-                summary_message += f"{prize['emoji']} {prize['position']}ème: {username} - {score:,} pts - {prize['amount']} CHF\n"
+                
+                # Calculer le montant pour chaque position
+                if i == 0:  # 1ère place - 40%
+                    amount = prize_pool * 0.40
+                    position = "1er"
+                    emoji = "🥇"
+                elif i == 1:  # 2ème place - 15%
+                    amount = prize_pool * 0.15
+                    position = "2ème"
+                    emoji = "🥈"
+                elif i == 2:  # 3ème place - 5%
+                    amount = prize_pool * 0.05
+                    position = "3ème"
+                    emoji = "🥉"
+                
+                summary_message += f"{emoji} {position}: {username} - {score:,} pts - {amount:.2f} CHF\n"
             
             summary_message += f"\n✅ Distribution terminée automatiquement"
             
