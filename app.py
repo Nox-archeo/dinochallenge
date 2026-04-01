@@ -1323,17 +1323,19 @@ def submit_score():
         logger.info(f"💾 Résultat sauvegarde: {result}")
         
         if result['success']:
-            # Notifier le bot Telegram si possible (compatible Flask)
-            if telegram_app:
-                def run_score_notification():
-                    try:
-                        asyncio.run(notify_new_score(telegram_id, score))
-                    except Exception as notif_error:
-                        logger.error(f"❌ Erreur notification score: {notif_error}")
-                
-                notification_thread = threading.Thread(target=run_score_notification)
-                notification_thread.daemon = True
-                notification_thread.start()
+            # Notification automatique désactivée pour éviter saturation du pool Telegram
+            # if telegram_app:
+            #     def run_score_notification():
+            #         try:
+            #             asyncio.run(notify_new_score(telegram_id, score))
+            #         except Exception as notif_error:
+            #             logger.error(f"❌ Erreur notification score: {notif_error}")
+            #     
+            #     notification_thread = threading.Thread(target=run_score_notification)
+            #     notification_thread.daemon = True
+            #     notification_thread.start()
+            
+            logger.info(f"✅ Score enregistré sans notification auto (évite saturation pool)")
             
             return jsonify({
                 'success': True,
