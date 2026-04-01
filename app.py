@@ -2931,8 +2931,6 @@ async def handle_callback_query(bot, callback_query):
                 text=text,
                 reply_markup=keyboard
             )
-                
-            )
         
         elif data.startswith("pay_subscription_"):
             telegram_id = int(data.replace("pay_subscription_", ""))
