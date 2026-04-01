@@ -2367,13 +2367,16 @@ async def handle_callback_query(bot, callback_query):
         
         elif data.startswith("pay_once_"):
             telegram_id = int(data.replace("pay_once_", ""))
-            payment_url = f"https://dinochallenge-bot.onrender.com/create-payment"
+            payment_url = f"https://dinochallenge-bot.onrender.com/create-payment?telegram_id={telegram_id}"
             
             text = f"💳 **Paiement Unique - {MONTHLY_PRICE_CHF} CHF**\n\n"
-            text += f"🔗 **Cliquez ici pour participer :**\n"
-            text += f"[🎯 Cagnotte]({payment_url}?telegram_id={telegram_id})\n\n"
             text += f"📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
             text += f"✅ Une fois payé, votre accès sera activé automatiquement !"
+            
+            # Créer un vrai bouton Telegram (URL cachée)
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🎯 Participer à la cagnotte", url=payment_url)]
+            ])
             
             await bot.edit_message_text(
                 chat_id=chat_id,

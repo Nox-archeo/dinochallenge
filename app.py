@@ -2916,36 +2916,44 @@ async def handle_callback_query(bot, callback_query):
         
         elif data.startswith("pay_once_"):
             telegram_id = int(data.replace("pay_once_", ""))
-            payment_url = f"https://dinochallenge-bot.onrender.com/create-payment"
+            payment_url = f"https://dinochallenge-bot.onrender.com/create-payment?telegram_id={telegram_id}"
             
             text = f"💳 **Paiement Unique - {MONTHLY_PRICE_CHF} CHF**\n\n"
-            text += f"🔗 **Cliquez ici pour participer :**\n"
-            text += f"[🎯 Cagnotte]({payment_url}?telegram_id={telegram_id})\n\n"
             text += f"📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
             text += f"✅ Une fois payé, votre accès sera activé automatiquement !"
+            
+            # Créer un vrai bouton Telegram (URL cachée)
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🎯 Participer à la cagnotte", url=payment_url)]
+            ])
             
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=callback_query.message.message_id,
                 text=text,
+                reply_markup=keyboard
                 
             )
         
         elif data.startswith("pay_subscription_"):
             telegram_id = int(data.replace("pay_subscription_", ""))
-            subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription"
+            subscription_url = f"https://dinochallenge-bot.onrender.com/create-subscription?telegram_id={telegram_id}"
             
             text = f"🔄 **Abonnement Mensuel - {MONTHLY_PRICE_CHF} CHF/mois**\n\n"
-            text += f"🔗 **Cliquez ici pour vous abonner :**\n"
-            text += f"[🔄 S'abonner avec PayPal]({subscription_url}?telegram_id={telegram_id})\n\n"
             text += f"📱 Vous serez redirigé vers PayPal pour configurer l'abonnement.\n"
             text += f"✅ Accès permanent avec renouvellement automatique !\n"
             text += f"❌ Annulable à tout moment avec /cancel_subscription"
             
+            # Créer un vrai bouton Telegram (URL cachée)
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 S'abonner", url=subscription_url)]
+            ])
+            
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=callback_query.message.message_id,
-                text=text
+                text=text,
+                reply_markup=keyboard
             )
 
         elif data == "profile":
