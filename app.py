@@ -2898,6 +2898,7 @@ async def force_user_setup(bot, message):
 
 async def handle_callback_query(bot, callback_query):
     """Gérer les callbacks des boutons"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     try:
         await callback_query.answer()
         
