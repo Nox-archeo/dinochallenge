@@ -2370,8 +2370,8 @@ async def handle_callback_query(bot, callback_query):
             payment_url = f"https://dinochallenge-bot.onrender.com/create-payment"
             
             text = f"💳 **Paiement Unique - {MONTHLY_PRICE_CHF} CHF**\n\n"
-            text += f"🔗 **Cliquez ici pour payer :**\n"
-            text += f"[💰 Payer avec PayPal]({payment_url}?telegram_id={telegram_id})\n\n"
+            text += f"🔗 **Cliquez ici pour participer :**\n"
+            text += f"[🎯 Cagnotte]({payment_url}?telegram_id={telegram_id})\n\n"
             text += f"📱 Vous serez redirigé vers PayPal pour finaliser le paiement.\n"
             text += f"✅ Une fois payé, votre accès sera activé automatiquement !"
             

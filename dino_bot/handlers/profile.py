@@ -89,7 +89,7 @@ async def handle_payment_request(query, context):
     result = paypal_service.create_monthly_bet_payment(user_id, username)
     
     if result['success']:
-        keyboard = [[InlineKeyboardButton("💳 Payer avec PayPal", url=result['payment_url'])]]
+        keyboard = [[InlineKeyboardButton("🎯 Cagnotte", url=result['payment_url'])]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = f"""
