@@ -5,7 +5,10 @@ import os
 import psycopg2
 
 # Configuration base de données
-DATABASE_URL = 'postgresql://dinochallenge_db_user:aa3SYFKmJBvq88GedqvZa2tNOKboberh@dpg-d2auslruibrs73f350tg-a.frankfurt-postgres.render.com/dinochallenge_db'
+DATABASE_URL = os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    print('❌ DATABASE_URL non définie dans les variables d\'environnement')
+    exit(1)
 
 def update_fake_names():
     """Mettre à jour les noms des joueurs fictifs avec les vrais noms"""

@@ -6,7 +6,10 @@ import psycopg2
 from datetime import datetime, timedelta
 
 # Configuration base de données
-DATABASE_URL = 'postgresql://dinochallenge_db_user:aa3SYFKmJBvq88GedqvZa2tNOKboberh@dpg-d2auslruibrs73f350tg-a.frankfurt-postgres.render.com/dinochallenge_db'
+DATABASE_URL = os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    print('❌ DATABASE_URL non définie dans les variables d\'environnement')
+    exit(1)
 
 def get_inscriptions_today():
     """Récupérer les inscriptions d'aujourd'hui avec l'heure exacte"""
