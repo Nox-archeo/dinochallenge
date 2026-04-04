@@ -993,25 +993,33 @@ class DatabaseManager:
                 
                 result = cursor.fetchone()
                 if not result:
-                    total_amount = Decimal('0')
+                    total_payments = Decimal('0')
                     total_players = 0
                 elif isinstance(result, dict):
-                    total_amount = Decimal(str(result['total_amount'] or 0))
+                    total_payments = Decimal(str(result['total_amount'] or 0))
                     total_players = result['total_players'] or 0
                 else:
                     # Si result est un tuple/liste
-                    total_amount = Decimal(str(result[0] or 0))
+                    total_payments = Decimal(str(result[0] or 0))
                     total_players = result[1] or 0
                 
-                # Calculer les prix selon les pourcentages
+                # NOUVELLE LOGIQUE : Cagnotte = 100 CHF de base + paiements participants
+                base_amount = Decimal('100.00')  # Cagnotte de base
+                total_amount = base_amount + total_payments
+                
+                # Calculer les prix selon les pourcentages (sur le total incluant la base)
                 first_prize = total_amount * Decimal('0.40')  # 40%
                 second_prize = total_amount * Decimal('0.15')  # 15%
                 third_prize = total_amount * Decimal('0.05')   # 5%
                 organization_fees = total_amount * Decimal('0.40')  # 40%
                 
+                logger.info(f"💰 Calcul cagnotte {month_year}: Base=100 CHF + Paiements={total_payments} CHF = Total={total_amount} CHF")
+                
                 return {
                     'month_year': month_year,
                     'total_amount': float(total_amount),
+                    'base_amount': float(base_amount),
+                    'payments_amount': float(total_payments),
                     'total_players': total_players,
                     'prizes': {
                         'first': float(first_prize),
