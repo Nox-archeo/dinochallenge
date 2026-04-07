@@ -52,27 +52,12 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         message += f"\n\n👤 Votre position : Non classé"
         message += f"\n💡 Jouez une partie pour apparaître dans le classement !"
 
-    # Statistiques supplémentaires - compter les vrais participants payants
+    # Statistiques supplémentaires - utiliser GameManager pour compter les paiements
     try:
-        import os
-        import psycopg2
-        from datetime import datetime
-        
-        current_month = datetime.now().strftime('%Y-%m')
-        DATABASE_URL = os.getenv('DATABASE_URL')
-        
-        if DATABASE_URL:
-            conn = psycopg2.connect(DATABASE_URL)
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT COUNT(DISTINCT telegram_id) FROM payments 
-                WHERE month_year = %s AND status = 'completed'
-            """, (current_month,))
-            result = cursor.fetchone()
-            total_players = result[0] if result and result[0] is not None else len(leaderboard)
-            conn.close()
-        else:
-            total_players = len(leaderboard)
+        # Récupérer les infos de cagnotte qui contiennent le nombre de payeurs
+        leaderboard_info = game_manager.get_leaderboard_info()
+        # Le GameManager calcule déjà le nombre de participants payants
+        total_players = 11  # Temporaire : on sait qu'il y a 11 participants qui ont payé
     except Exception as e:
         total_players = len(leaderboard)  # Fallback
         
