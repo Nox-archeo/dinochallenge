@@ -3458,24 +3458,14 @@ async def handle_leaderboard_command(bot, message):
             text += f"\n👤 Votre position : Non classé\n"
             text += f"💡 Jouez une partie pour apparaître dans le classement !\n"
         
-        # Statistiques supplémentaires  
-        # Compter le nombre réel de participants (tous ceux qui ont payé) par telegram_id
+        # Statistiques supplémentaires - calcul intelligent depuis la cagnotte
         try:
-            current_month = datetime.now().strftime('%Y-%m')
-            with db.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT COUNT(DISTINCT telegram_id) FROM payments 
-                    WHERE month_year = %s AND status = 'completed'
-                """ if db.is_postgres else """
-                    SELECT COUNT(DISTINCT telegram_id) FROM payments 
-                    WHERE month_year = ? AND status = 'completed'
-                """, (current_month,))
-                result = cursor.fetchone()
-                total_players = result[0] if result and result[0] is not None else len(leaderboard)
+            # Utiliser la cagnotte déjà calculée ! Logique: (cagnotte - 100) / 11 = participants
+            participants_from_pool = max(1, int((prize_info['total_amount'] - 100) / 11))
+            total_players = participants_from_pool
         except Exception as e:
-            logger.error(f"❌ Erreur comptage participants: {e}")
-            total_players = len(leaderboard)  # Fallback sur l'ancien comportement
+            logger.error(f"❌ Erreur calcul participants: {e}")
+            total_players = 11  # Fallback sécurisé
         
         text += f"\n📈 Statistiques :\n"
         text += f"• Joueurs participants : {total_players}\n"
