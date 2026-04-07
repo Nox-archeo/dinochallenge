@@ -54,23 +54,25 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Statistiques supplémentaires - compter les vrais participants payants
     try:
+        import os
+        import psycopg2
         from datetime import datetime
-        from services.db_manager import DatabaseManager
         
         current_month = datetime.now().strftime('%Y-%m')
-        db = DatabaseManager()
+        DATABASE_URL = os.getenv('DATABASE_URL')
         
-        with db.get_connection() as conn:
+        if DATABASE_URL:
+            conn = psycopg2.connect(DATABASE_URL)
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT COUNT(DISTINCT telegram_id) FROM payments 
                 WHERE month_year = %s AND status = 'completed'
-            """ if db.is_postgres else """
-                SELECT COUNT(DISTINCT telegram_id) FROM payments 
-                WHERE month_year = ? AND status = 'completed'
             """, (current_month,))
             result = cursor.fetchone()
             total_players = result[0] if result and result[0] is not None else len(leaderboard)
+            conn.close()
+        else:
+            total_players = len(leaderboard)
     except Exception as e:
         total_players = len(leaderboard)  # Fallback
         
