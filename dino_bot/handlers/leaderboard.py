@@ -52,15 +52,31 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         message += f"\n\n👤 Votre position : Non classé"
         message += f"\n💡 Jouez une partie pour apparaître dans le classement !"
 
-    # Statistiques supplémentaires
-    total_players = len(leaderboard)
+    # Statistiques supplémentaires - compter les vrais participants payants
+    try:
+        from datetime import datetime
+        from services.db_manager import DatabaseManager
+        
+        current_month = datetime.now().strftime('%Y-%m')
+        db = DatabaseManager()
+        
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(DISTINCT telegram_id) FROM payments 
+                WHERE month_year = %s AND status = 'completed'
+            """ if db.is_postgres else """
+                SELECT COUNT(DISTINCT telegram_id) FROM payments 
+                WHERE month_year = ? AND status = 'completed'
+            """, (current_month,))
+            result = cursor.fetchone()
+            total_players = result[0] if result and result[0] is not None else len(leaderboard)
+    except Exception as e:
+        total_players = len(leaderboard)  # Fallback
+        
     message += f"\n\n📈 Statistiques :"
     message += f"\n• Joueurs participants : {total_players}"
     message += f"\n• Votre rang : #{user_rank if user_rank > 0 else 'N/A'}"
-
-    if total_players > 0:
-        avg_score = sum(p['score'] for p in leaderboard) / len(leaderboard)
-        message += f"\n• Score moyen : {avg_score:.1f} pts"
 
     await update.message.reply_text(message)
 
