@@ -3460,17 +3460,22 @@ async def handle_leaderboard_command(bot, message):
         
         # Statistiques supplémentaires  
         # Compter le nombre réel de participants (tous ceux qui ont payé)
-        current_month = datetime.now().strftime('%Y-%m')
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT COUNT(DISTINCT user_id) FROM payments 
-                WHERE month_year = %s AND status = 'completed'
-            """ if db.is_postgres else """
-                SELECT COUNT(DISTINCT user_id) FROM payments 
-                WHERE month_year = ? AND status = 'completed'
-            """, (current_month,))
-            total_players = cursor.fetchone()[0] or 0
+        try:
+            current_month = datetime.now().strftime('%Y-%m')
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT user_id) FROM payments 
+                    WHERE month_year = %s AND status = 'completed'
+                """ if db.is_postgres else """
+                    SELECT COUNT(DISTINCT user_id) FROM payments 
+                    WHERE month_year = ? AND status = 'completed'
+                """, (current_month,))
+                result = cursor.fetchone()
+                total_players = result[0] if result and result[0] is not None else len(leaderboard)
+        except Exception as e:
+            logger.error(f"❌ Erreur comptage participants: {e}")
+            total_players = len(leaderboard)  # Fallback sur l'ancien comportement
         
         text += f"\n📈 Statistiques :\n"
         text += f"• Joueurs participants : {total_players}\n"
