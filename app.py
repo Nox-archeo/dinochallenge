@@ -3422,7 +3422,15 @@ async def handle_leaderboard_command(bot, message):
         # Calculer les prix du mois avec la vraie logique
         prize_info = db.calculate_monthly_prizes(current_month)
         
-        text = f"🏆 Classement {datetime.now().strftime('%B %Y')}\n\n"
+        # Noms des mois en français
+        month_names = [
+            '', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+            'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+        ]
+        current_month_num = datetime.now().month
+        current_year = datetime.now().year
+        
+        text = f"🏆 Classement {month_names[current_month_num]} {current_year}\n\n"
         text += f"💰 Cagnotte totale : {prize_info['total_amount']:.2f} CHF\n"
         text += f"⏰ Fin du concours : Dans {31 - datetime.now().day} jour(s)\n\n"
         text += f"🏅 Récompenses :\n"
