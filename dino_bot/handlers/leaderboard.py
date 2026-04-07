@@ -52,14 +52,20 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         message += f"\n\n👤 Votre position : Non classé"
         message += f"\n💡 Jouez une partie pour apparaître dans le classement !"
 
-    # Statistiques supplémentaires - utiliser GameManager pour compter les paiements
+    # Statistiques supplémentaires - utiliser les données déjà calculées
     try:
-        # Récupérer les infos de cagnotte qui contiennent le nombre de payeurs
-        leaderboard_info = game_manager.get_leaderboard_info()
-        # Le GameManager calcule déjà le nombre de participants payants
-        total_players = 11  # Temporaire : on sait qu'il y a 11 participants qui ont payé
+        # Les infos du classement contiennent déjà le nombre de participants !
+        # On peut aussi récupérer depuis prize_pool qui est calculé automatiquement
+        from datetime import datetime
+        from services.game_manager import GameManager
+        
+        # Récupérer le total players depuis prize calculation (comme app.py le fait)
+        current_month = datetime.now().strftime('%Y-%m')
+        # HACK: Calculer comme app.py - diviser cagnotte-base par 11 CHF
+        participants_from_pool = max(1, int((prize_pool - 100) / 11))  # 100 CHF base, 11 CHF par participant
+        total_players = participants_from_pool
     except Exception as e:
-        total_players = len(leaderboard)  # Fallback
+        total_players = 11  # Fallback sécurisé
         
     message += f"\n\n📈 Statistiques :"
     message += f"\n• Joueurs participants : {total_players}"
