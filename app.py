@@ -3459,16 +3459,16 @@ async def handle_leaderboard_command(bot, message):
             text += f"💡 Jouez une partie pour apparaître dans le classement !\n"
         
         # Statistiques supplémentaires  
-        # Compter le nombre réel de participants (tous ceux qui ont payé)
+        # Compter le nombre réel de participants (tous ceux qui ont payé) par telegram_id
         try:
             current_month = datetime.now().strftime('%Y-%m')
             with db.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    SELECT COUNT(DISTINCT user_id) FROM payments 
+                    SELECT COUNT(DISTINCT telegram_id) FROM payments 
                     WHERE month_year = %s AND status = 'completed'
                 """ if db.is_postgres else """
-                    SELECT COUNT(DISTINCT user_id) FROM payments 
+                    SELECT COUNT(DISTINCT telegram_id) FROM payments 
                     WHERE month_year = ? AND status = 'completed'
                 """, (current_month,))
                 result = cursor.fetchone()
@@ -3480,10 +3480,6 @@ async def handle_leaderboard_command(bot, message):
         text += f"\n📈 Statistiques :\n"
         text += f"• Joueurs participants : {total_players}\n"
         text += f"• Votre rang : #{user_rank if user_rank else 'N/A'}\n"
-        
-        if len(leaderboard) > 0:
-            avg_score = sum(p['best_score'] for p in leaderboard) / len(leaderboard)
-            text += f"• Score moyen : {avg_score:.1f} pts"
         
         await bot.send_message(
             chat_id=message.chat_id,
